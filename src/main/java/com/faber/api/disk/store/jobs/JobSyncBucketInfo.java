@@ -22,7 +22,6 @@ public class JobSyncBucketInfo extends BaseJob {
     @Override
     protected void run() {
         storeBucketBiz.syncBucketSize();
-        log.info("{}：执行完毕=======================", this.getClass().getSimpleName());
     }
 
 }
