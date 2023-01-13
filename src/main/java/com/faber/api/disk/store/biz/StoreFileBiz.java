@@ -92,9 +92,9 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         if (!entity.getDir()) {
             FileSave fileSave = fileSaveBiz.getById(entity.getFileId());
 
-            entity.setName(fileSave.getName());
+            entity.setName(fileSave.getOriginalFilename());
             entity.setSize(fileSave.getSize());
-            entity.setType(FileUtil.extName(fileSave.getName()));
+            entity.setType(FileUtil.extName(fileSave.getOriginalFilename()));
 
             // judge same name file
             long count = lambdaQuery()
@@ -105,7 +105,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
                     .count();
             if (count > 0) {
                 String now = DateUtil.format(new Date(), "yyyyMMddHHmmss");
-                entity.setName(FaFileUtils.addSuffixToFileName(fileSave.getName(), "_(" + count + ")_" + now));
+                entity.setName(FaFileUtils.addSuffixToFileName(fileSave.getOriginalFilename(), "_(" + count + ")_" + now));
             }
         } else {
             // judge same name dir
