@@ -17,7 +17,6 @@ import com.faber.api.disk.store.vo.req.StoreFileQueryVo;
 import com.faber.api.disk.store.vo.req.StoreFilesAddTags;
 import com.faber.api.disk.store.vo.req.StoreFilesMoveTo;
 import com.faber.core.exception.BuzzException;
-import com.faber.core.file.impl.FileHelperLocal;
 import com.faber.core.utils.FaFileUtils;
 import com.faber.core.vo.msg.TableRet;
 import com.faber.core.vo.query.BasePageQuery;
@@ -247,8 +246,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
 
                 this.addFiles(dirPath, subList);
             } else {
-                FileSave fileSave = fileSaveBiz.getById(storeFile.getFileId());
-                File srcFile = FileHelperLocal.getLocalFileSavePath(fileSave.getUrl());
+                File srcFile = fileSaveBiz.getFileObj(storeFile.getFileId());
 
                 FileUtil.copyFile(srcFile, new File(rootDir));
                 FileUtil.rename(new File(rootDir + File.separator + srcFile.getName()), storeFile.getName(), true);
