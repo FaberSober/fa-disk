@@ -1,5 +1,6 @@
 package com.faber.api.disk.store.biz;
 
+import cn.hutool.core.collection.ListUtil;
 import com.faber.api.disk.store.entity.StoreBucket;
 import com.faber.api.disk.store.entity.StoreBucketUser;
 import com.faber.api.disk.store.entity.StoreFile;
@@ -47,17 +48,20 @@ public class StoreBucketBiz extends BaseBiz<StoreBucketMapper, StoreBucket> {
         return true;
     }
 
-    public List<StoreBucket> getMyList() {
+    public List<Integer> getMyIds() {
         List<Integer> linkBucketIds = storeBucketUserBiz.lambdaQuery()
                 .eq(StoreBucketUser::getUserId, getCurrentUserId())
                 .select(StoreBucketUser::getBucketId)
                 .list()
                 .stream().map(i -> i.getBucketId()).collect(Collectors.toList());
-        if (linkBucketIds == null || linkBucketIds.isEmpty()) return Collections.emptyList();
+        if (linkBucketIds == null || linkBucketIds.isEmpty()) return ListUtil.toList(0);
+        return linkBucketIds;
+    }
 
-        List<StoreBucket> all = lambdaQuery().in(StoreBucket::getId, linkBucketIds).list();
+    public List<StoreBucket> getMyList() {
+        List<Integer> linkBucketIds = this.getMyIds();
 
-        return all;
+        return lambdaQuery().in(StoreBucket::getId, linkBucketIds).list();
     }
 
     public void syncBucketSize() {
