@@ -74,6 +74,9 @@ public class StoreFile extends BaseDelEntity {
     @ExcelProperty("标签")
     private Tag[] tags;
 
+    @ExcelProperty("文件信息")
+    private String info;
+
     @ExcelProperty("是否有删除动作")
     private Boolean deleteAction;
 

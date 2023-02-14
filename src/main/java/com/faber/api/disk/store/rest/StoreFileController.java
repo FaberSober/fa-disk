@@ -8,11 +8,13 @@ import com.faber.api.disk.store.vo.req.StoreFilesMoveTo;
 import com.faber.core.annotation.FaLogBiz;
 import com.faber.core.annotation.FaLogOpr;
 import com.faber.core.annotation.LogNoRet;
+import com.faber.core.config.validator.validator.Vg;
 import com.faber.core.enums.LogCrudEnum;
 import com.faber.core.vo.msg.Ret;
 import com.faber.core.vo.msg.TableRet;
 import com.faber.core.vo.query.BasePageQuery;
 import com.faber.core.web.rest.BaseTreeController;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -113,6 +115,14 @@ public class StoreFileController extends BaseTreeController<StoreFileBiz, StoreF
     @ResponseBody
     public Ret<Boolean> putBackToDir(@RequestBody StoreFilesMoveTo params) {
         baseBiz.putBackToDir(params);
+        return ok();
+    }
+
+    @FaLogOpr(value = "更新备注", crud = LogCrudEnum.U)
+    @RequestMapping(value = "/updateInfo", method = RequestMethod.POST)
+    @ResponseBody
+    public Ret<StoreFile> updateInfo(@RequestBody StoreFile entity) {
+        baseBiz.updateInfo(entity);
         return ok();
     }
 

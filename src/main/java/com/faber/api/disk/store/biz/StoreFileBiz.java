@@ -25,6 +25,7 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import javax.annotation.Resource;
 import java.io.File;
@@ -142,6 +143,10 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         if (count > 0) throw new BuzzException("已经存在同名文件");
 
         return super.updateById(entity);
+    }
+
+    public void updateInfo(StoreFile entity) {
+        super.updateById(entity);
     }
 
     public void loopDelete(List<StoreFile> list) {
