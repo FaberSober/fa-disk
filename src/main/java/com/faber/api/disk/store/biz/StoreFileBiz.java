@@ -149,6 +149,12 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         super.updateById(entity);
     }
 
+    public void updateInfoBatch(List<StoreFile> list) {
+        for (StoreFile storeFile : list) {
+            this.updateInfo(storeFile);
+        }
+    }
+
     public void loopDelete(List<StoreFile> list) {
         for (StoreFile item : list) {
             if (item.getDir()) {

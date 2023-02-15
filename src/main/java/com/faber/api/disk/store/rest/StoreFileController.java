@@ -126,4 +126,12 @@ public class StoreFileController extends BaseTreeController<StoreFileBiz, StoreF
         return ok();
     }
 
+    @FaLogOpr(value = "批量更新备注", crud = LogCrudEnum.U)
+    @RequestMapping(value = "/updateInfoBatch", method = RequestMethod.POST)
+    @ResponseBody
+    public Ret<StoreFile> updateInfoBatch(@RequestBody List<StoreFile> list) {
+        baseBiz.updateInfoBatch(list);
+        return ok();
+    }
+
 }
