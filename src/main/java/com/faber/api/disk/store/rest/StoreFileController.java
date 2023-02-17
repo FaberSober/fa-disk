@@ -8,13 +8,11 @@ import com.faber.api.disk.store.vo.req.StoreFilesMoveTo;
 import com.faber.core.annotation.FaLogBiz;
 import com.faber.core.annotation.FaLogOpr;
 import com.faber.core.annotation.LogNoRet;
-import com.faber.core.config.validator.validator.Vg;
 import com.faber.core.enums.LogCrudEnum;
 import com.faber.core.vo.msg.Ret;
 import com.faber.core.vo.msg.TableRet;
 import com.faber.core.vo.query.BasePageQuery;
 import com.faber.core.web.rest.BaseTreeController;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -41,7 +39,6 @@ public class StoreFileController extends BaseTreeController<StoreFileBiz, StoreF
     }
 
     @FaLogOpr(value = "移动到", crud = LogCrudEnum.U)
-    @LogNoRet
     @RequestMapping(value = "/moveToDir", method = RequestMethod.POST)
     @ResponseBody
     public Ret<Boolean> moveToDir(@RequestBody StoreFilesMoveTo params) {
@@ -50,7 +47,6 @@ public class StoreFileController extends BaseTreeController<StoreFileBiz, StoreF
     }
 
     @FaLogOpr(value = "复制到", crud = LogCrudEnum.U)
-    @LogNoRet
     @RequestMapping(value = "/copyToDir", method = RequestMethod.POST)
     @ResponseBody
     public Ret<Boolean> copyToDir(@RequestBody StoreFilesMoveTo params) {
@@ -59,7 +55,6 @@ public class StoreFileController extends BaseTreeController<StoreFileBiz, StoreF
     }
 
     @FaLogOpr(value = "打标签", crud = LogCrudEnum.U)
-    @LogNoRet
     @RequestMapping(value = "/addTags", method = RequestMethod.POST)
     @ResponseBody
     public Ret<Boolean> addTags(@RequestBody StoreFilesAddTags params) {
@@ -76,7 +71,6 @@ public class StoreFileController extends BaseTreeController<StoreFileBiz, StoreF
     }
 
     @FaLogOpr(value = "检索文件", crud = LogCrudEnum.R)
-    @LogNoRet
     @RequestMapping(value = "/queryFile", method = RequestMethod.POST)
     @ResponseBody
     public Ret<List<StoreFile>> queryFile(@RequestBody BasePageQuery<StoreFileQueryVo> params) {
@@ -85,7 +79,6 @@ public class StoreFileController extends BaseTreeController<StoreFileBiz, StoreF
     }
 
     @FaLogOpr(value = "检索文件分页", crud = LogCrudEnum.R)
-    @LogNoRet
     @RequestMapping(value = "/queryFilePage", method = RequestMethod.POST)
     @ResponseBody
     public TableRet<StoreFile> queryFilePage(@RequestBody BasePageQuery<StoreFileQueryVo> params) {
@@ -93,7 +86,6 @@ public class StoreFileController extends BaseTreeController<StoreFileBiz, StoreF
     }
 
     @FaLogOpr(value = "检索回收站文件分页", crud = LogCrudEnum.R)
-    @LogNoRet
     @RequestMapping(value = "/queryTrashFilePage", method = RequestMethod.POST)
     @ResponseBody
     public TableRet<StoreFile> queryTrashFilePage(@RequestBody BasePageQuery<StoreFileQueryVo> params) {
@@ -101,7 +93,6 @@ public class StoreFileController extends BaseTreeController<StoreFileBiz, StoreF
     }
 
     @FaLogOpr(value = "恢复到原处", crud = LogCrudEnum.U)
-    @LogNoRet
     @RequestMapping(value = "/putBack", method = RequestMethod.POST)
     @ResponseBody
     public Ret<Boolean> putBack(@RequestBody List<Integer> ids) {
@@ -110,7 +101,6 @@ public class StoreFileController extends BaseTreeController<StoreFileBiz, StoreF
     }
 
     @FaLogOpr(value = "恢复到", crud = LogCrudEnum.U)
-    @LogNoRet
     @RequestMapping(value = "/putBackToDir", method = RequestMethod.POST)
     @ResponseBody
     public Ret<Boolean> putBackToDir(@RequestBody StoreFilesMoveTo params) {
