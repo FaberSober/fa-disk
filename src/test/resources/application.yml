@@ -69,6 +69,7 @@ spring:
     database: 0
     timeout: 2000
     password: ~
+    sysName: file-web #默认key前缀
   servlet:
     multipart:
       max-file-size: 1000MB
