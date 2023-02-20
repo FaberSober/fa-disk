@@ -20,8 +20,8 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- ----------------------------
 -- Table structure for disk_store_bucket
 -- ----------------------------
-DROP TABLE IF EXISTS `disk_store_bucket`;
-CREATE TABLE `disk_store_bucket` (
+
+CREATE TABLE IF NOT EXISTS `disk_store_bucket` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT 'ID',
   `name` varchar(255) NOT NULL COMMENT '库名称',
   `size` bigint(20) DEFAULT NULL COMMENT '总文件大小',
@@ -42,8 +42,8 @@ CREATE TABLE `disk_store_bucket` (
 -- ----------------------------
 -- Table structure for disk_store_bucket_user
 -- ----------------------------
-DROP TABLE IF EXISTS `disk_store_bucket_user`;
-CREATE TABLE `disk_store_bucket_user` (
+
+CREATE TABLE IF NOT EXISTS `disk_store_bucket_user` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT 'ID',
   `bucket_id` int(11) NOT NULL COMMENT '库ID',
   `user_id` varchar(32) NOT NULL COMMENT '用户ID',
@@ -63,8 +63,8 @@ CREATE TABLE `disk_store_bucket_user` (
 -- ----------------------------
 -- Table structure for disk_store_file
 -- ----------------------------
-DROP TABLE IF EXISTS `disk_store_file`;
-CREATE TABLE `disk_store_file` (
+
+CREATE TABLE IF NOT EXISTS `disk_store_file` (
   `id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID',
   `bucket_id` int(11) NOT NULL COMMENT '库ID',
   `name` varchar(255) NOT NULL COMMENT '文件夹名称',
@@ -93,8 +93,8 @@ CREATE TABLE `disk_store_file` (
 -- ----------------------------
 -- Table structure for disk_store_file_tag
 -- ----------------------------
-DROP TABLE IF EXISTS `disk_store_file_tag`;
-CREATE TABLE `disk_store_file_tag` (
+
+CREATE TABLE IF NOT EXISTS `disk_store_file_tag` (
   `id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID',
   `file_id` int(11) NOT NULL COMMENT '文件ID',
   `tag_id` int(11) NOT NULL COMMENT '标签ID',
@@ -113,8 +113,8 @@ CREATE TABLE `disk_store_file_tag` (
 -- ----------------------------
 -- Table structure for disk_store_tag
 -- ----------------------------
-DROP TABLE IF EXISTS `disk_store_tag`;
-CREATE TABLE `disk_store_tag` (
+
+CREATE TABLE IF NOT EXISTS `disk_store_tag` (
   `id` int(11) NOT NULL AUTO_INCREMENT COMMENT 'ID',
   `bucket_id` int(11) NOT NULL COMMENT '库ID',
   `parent_id` int(11) NOT NULL COMMENT '父ID',
