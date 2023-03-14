@@ -1,5 +1,6 @@
 package com.faber.api.disk.doc.biz;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
 import com.faber.api.base.admin.biz.FileSaveBiz;
 import com.faber.api.base.admin.biz.UserBiz;
@@ -15,8 +16,10 @@ import com.faber.api.base.doc.models.filemodel.FileModel;
 import com.faber.api.base.doc.utils.FaFileUtility;
 import com.faber.api.base.doc.vo.ret.OpenFileRetVo;
 import com.faber.api.disk.store.biz.StoreFileBiz;
+import com.faber.api.disk.store.biz.StoreFileHisBiz;
 import com.faber.api.disk.store.entity.StoreFile;
 import com.faber.core.constant.FaSetting;
+import lombok.SneakyThrows;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
@@ -46,6 +49,9 @@ public class DiskOnlyofficeBiz {
 
     @Resource
     StoreFileBiz storeFileBiz;
+
+    @Resource
+    StoreFileHisBiz storeFileHisBiz;
 
     @Lazy
     @Resource
@@ -130,16 +136,33 @@ public class DiskOnlyofficeBiz {
      * 保存
      * @param track
      */
+    @SneakyThrows
     public void saveTrack(Track track) {
+        if (StrUtil.isEmpty(track.getUrl())) return;
+
+        StoreFile storeFile = storeFileBiz.getById(track.getKey());
+
         if (track.getActions() == null || track.getActions().isEmpty()) return;
         Action action = track.getActions().get(0);
         switch (action.getType()) {
             case edit:
                 // 获取本次操作的用户ID
-                action.getUserid();
+                String userId = action.getUserid();
+                userBiz.setUserLogin(userId);
 
                 // 需要保存的文件URL，将此URL下载保存到本地。
-                track.getUrl();
+                String url = track.getUrl();
+                FileSave fileSave = fileSaveBiz.download(url, storeFile.getName());
+
+                // 记录文件历史记录
+                storeFileHisBiz.saveSnapshot(storeFile);
+
+                // 更新最新的文件
+                storeFileBiz.lambdaUpdate()
+                        .set(StoreFile::getFileId, fileSave.getId())
+                        .eq(StoreFile::getId, storeFile.getId())
+                        .update();
+
                 break;
         }
     }

@@ -14,7 +14,7 @@ import lombok.Data;
  * 
  * @author xu.pengfei
  * @email 1508075252@qq.com
- * @date 2023-03-14 16:47:02
+ * @date 2023-03-14 17:13:27
  */
 @FaModalName(name = "STORE-文件-历史记录")
 @TableName("disk_store_file_his")
@@ -29,7 +29,7 @@ public class StoreFileHis extends BaseDelEntity {
     private Integer storeFileId;
 
     @ExcelProperty("版本文件ID")
-    private String fileSave;
+    private String fileSaveId;
 
     @ExcelProperty("文件名")
     private String fileName;

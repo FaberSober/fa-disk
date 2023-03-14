@@ -7,7 +7,7 @@
     <resultMap type="com.faber.api.disk.store.entity.StoreFileHis" id="StoreFileHisMap">
         <result property="id" column="id"/>
         <result property="storeFileId" column="store_file_id"/>
-        <result property="fileSave" column="file_save"/>
+        <result property="fileSaveId" column="file_save_id"/>
         <result property="fileName" column="file_name"/>
         <result property="remark" column="remark"/>
         <result property="crtTime" column="crt_time"/>

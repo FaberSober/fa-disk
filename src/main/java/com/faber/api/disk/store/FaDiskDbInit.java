@@ -36,6 +36,9 @@ public class FaDiskDbInit implements DbInit {
                 .addSql(new FaDdlSql("初始化", "sql/1.0.0_disk_full.sql"))
                 .addSql(new FaDdlSql("初始化data", "sql/1.0.0_disk_data.sql")));
 
+        list.add(new FaDdl(100_000_001L, "V1.0.1", "新增文档历史记录表")
+                .addSql(new FaDdlSql("初始化", "sql/1.0.1_disk_ddl.sql")));
+
         return list;
     }
 }
