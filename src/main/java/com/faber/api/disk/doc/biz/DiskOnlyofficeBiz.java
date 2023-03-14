@@ -138,7 +138,7 @@ public class DiskOnlyofficeBiz {
                 // 获取本次操作的用户ID
                 action.getUserid();
 
-                // 需要保存的文件URL，将此URL下载保存到本地。这里没有继续实现了，文件的更新放到了fa-disk网盘模块中进行处理。
+                // 需要保存的文件URL，将此URL下载保存到本地。
                 track.getUrl();
                 break;
         }
