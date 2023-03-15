@@ -11,8 +11,8 @@ import com.faber.core.web.biz.BaseBiz;
  * STORE-文件-历史记录
  *
  * @author xu.pengfei
- * @email 1508075252@qq.com
- * @date 2023-03-14 17:13:27
+ * @email faberxu@gmail.com
+ * @date 2023-03-15 16:31:06
  */
 @Service
 public class StoreFileHisBiz extends BaseBiz<StoreFileHisMapper,StoreFileHis> {

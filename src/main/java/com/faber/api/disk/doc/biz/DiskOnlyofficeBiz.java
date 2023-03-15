@@ -18,8 +18,10 @@ import com.faber.api.base.doc.vo.ret.OpenFileRetVo;
 import com.faber.api.disk.store.biz.StoreFileBiz;
 import com.faber.api.disk.store.biz.StoreFileHisBiz;
 import com.faber.api.disk.store.entity.StoreFile;
+import com.faber.api.disk.store.entity.StoreFileHis;
 import com.faber.core.constant.FaSetting;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
@@ -32,6 +34,7 @@ import java.util.Map;
  * @date 2023/3/13 16:33
  * @description
  */
+@Slf4j
 @Service
 public class DiskOnlyofficeBiz {
 
@@ -85,7 +88,10 @@ public class DiskOnlyofficeBiz {
         Document document = fileModel.getDocument();
         document.setTitle(storeFile.getName());
         document.setFileType(fileSave.getExt());
-        document.setKey(storeFileId + ""); // 设置文件ID
+
+        // 不要忘记每次编辑和保存文档时，都必须重新生成document.key。
+        document.setKey(storeFileId + "_" + fileId); // 设置文件ID
+
         // onlyoffice下载文件的URL，onlyoffice服务器需要能访问到该URL
         document.setUrl(faSetting.getOnlyoffice().getCallbackServer() + "api/base/admin/fileSave/getFile/" + fileId);
 
@@ -136,11 +142,10 @@ public class DiskOnlyofficeBiz {
      * 保存
      * @param track
      */
-    @SneakyThrows
     public void saveTrack(Track track) {
         if (StrUtil.isEmpty(track.getUrl())) return;
 
-        StoreFile storeFile = storeFileBiz.getById(track.getKey());
+        StoreFile storeFile = storeFileBiz.getById(track.getKey().split("_")[0]);
 
         if (track.getActions() == null || track.getActions().isEmpty()) return;
         Action action = track.getActions().get(0);
@@ -150,18 +155,36 @@ public class DiskOnlyofficeBiz {
                 String userId = action.getUserid();
                 userBiz.setUserLogin(userId);
 
-                // 需要保存的文件URL，将此URL下载保存到本地。
-                String url = track.getUrl();
-                FileSave fileSave = fileSaveBiz.download(url, storeFile.getName());
-
                 // 记录文件历史记录
-                storeFileHisBiz.saveSnapshot(storeFile);
+                StoreFileHis storeFileHis = new StoreFileHis();
+                storeFileHis.setStoreFileId(storeFile.getId());
+                storeFileHis.setFileSaveId(storeFile.getFileId());
+                storeFileHis.setFileName(storeFile.getName());
 
-                // 更新最新的文件
-                storeFileBiz.lambdaUpdate()
-                        .set(StoreFile::getFileId, fileSave.getId())
-                        .eq(StoreFile::getId, storeFile.getId())
-                        .update();
+                // 记录文件变更记录
+                if (StrUtil.isNotEmpty(track.getChangesurl())) {
+                    try {
+                        FileSave changeFileSave = fileSaveBiz.download(track.getChangesurl(), "changes.zip");
+                        storeFileHis.setChangeFileId(changeFileSave.getId());
+                    } catch (Exception e) {
+                        log.error(e.getMessage(), e);
+                    }
+                }
+
+                storeFileHisBiz.save(storeFileHis);
+
+                try {
+                    // 需要保存的文件URL，将此URL下载保存到本地。
+                    FileSave fileSave = fileSaveBiz.download(track.getUrl(), storeFile.getName());
+
+                    // 更新最新的文件
+                    storeFileBiz.lambdaUpdate()
+                            .set(StoreFile::getFileId, fileSave.getId())
+                            .eq(StoreFile::getId, storeFile.getId())
+                            .update();
+                } catch (Exception e) {
+                    log.error(e.getMessage(), e);
+                }
 
                 break;
         }

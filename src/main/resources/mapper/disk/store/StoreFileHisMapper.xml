@@ -8,6 +8,7 @@
         <result property="id" column="id"/>
         <result property="storeFileId" column="store_file_id"/>
         <result property="fileSaveId" column="file_save_id"/>
+        <result property="changeFileId" column="change_file_id"/>
         <result property="fileName" column="file_name"/>
         <result property="remark" column="remark"/>
         <result property="crtTime" column="crt_time"/>
