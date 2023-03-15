@@ -31,7 +31,7 @@ public class DiskOnlyofficeController extends BaseResHandler {
     @FaLogOpr("打开文件Token")
     @GetMapping("/openFile/{storeFileId}")
     @ResponseBody
-    public Ret<OpenFileRetVo> openFile(@PathVariable("storeFileId") String storeFileId) {
+    public Ret<OpenFileRetVo> openFile(@PathVariable("storeFileId") Integer storeFileId) {
         OpenFileRetVo data = diskOnlyofficeBiz.openFile(storeFileId);
         return ok(data);
     }

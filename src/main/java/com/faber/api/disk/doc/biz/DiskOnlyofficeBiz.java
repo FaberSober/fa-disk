@@ -57,7 +57,7 @@ public class DiskOnlyofficeBiz {
     @Resource
     UserBiz userBiz;
 
-    public OpenFileRetVo openFile(String storeFileId) {
+    public OpenFileRetVo openFile(Integer storeFileId) {
         OpenFileRetVo retVo = new OpenFileRetVo();
         retVo.setFileModel(openFileModal(storeFileId));
         retVo.setDocumentApi(faSetting.getOnlyoffice().getOnlyofficeServer());
@@ -70,7 +70,7 @@ public class DiskOnlyofficeBiz {
      * @param storeFileId {@link StoreFile#getId()}
      * @return
      */
-    public FileModel openFileModal(String storeFileId) {
+    public FileModel openFileModal(Integer storeFileId) {
         StoreFile storeFile = storeFileBiz.getById(storeFileId);
         String fileId = storeFile.getFileId();
 
@@ -85,7 +85,7 @@ public class DiskOnlyofficeBiz {
         Document document = fileModel.getDocument();
         document.setTitle(storeFile.getName());
         document.setFileType(fileSave.getExt());
-        document.setKey(fileId); // 设置文件ID
+        document.setKey(storeFileId + ""); // 设置文件ID
         // onlyoffice下载文件的URL，onlyoffice服务器需要能访问到该URL
         document.setUrl(faSetting.getOnlyoffice().getCallbackServer() + "api/base/admin/fileSave/getFile/" + fileId);
 
