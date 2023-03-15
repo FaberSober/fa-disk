@@ -10,6 +10,7 @@
         <result property="fileSaveId" column="file_save_id"/>
         <result property="changeFileId" column="change_file_id"/>
         <result property="fileName" column="file_name"/>
+        <result property="ver" column="ver"/>
         <result property="remark" column="remark"/>
         <result property="crtTime" column="crt_time"/>
         <result property="crtUser" column="crt_user"/>

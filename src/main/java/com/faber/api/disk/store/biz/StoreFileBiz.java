@@ -25,7 +25,6 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.RequestBody;
 
 import javax.annotation.Resource;
 import java.io.File;
@@ -89,7 +88,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     @Override
     public boolean save(StoreFile entity) {
         // store file
-        if (!entity.getDir()) {
+        if (!entity.getDir()) { // 文件类型，存储文件
             FileSave fileSave = fileSaveBiz.getById(entity.getFileId());
 
             entity.setName(fileSave.getOriginalFilename());
@@ -107,7 +106,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
                 String now = DateUtil.format(new Date(), "yyyyMMddHHmmss");
                 entity.setName(FaFileUtils.addSuffixToFileName(fileSave.getOriginalFilename(), "_(" + count + ")_" + now));
             }
-        } else {
+        } else { // 文件夹，保存文件夹
             // judge same name dir
             long count = lambdaQuery()
                     .eq(StoreFile::getBucketId, entity.getBucketId())

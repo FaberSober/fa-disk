@@ -161,6 +161,10 @@ public class DiskOnlyofficeBiz {
                 storeFileHis.setFileSaveId(storeFile.getFileId());
                 storeFileHis.setFileName(storeFile.getName());
 
+                // 增加版本号
+                int curVer = storeFileHisBiz.getStoreFileMaxVer(storeFile.getId());
+                storeFileHis.setVer(curVer + 1);
+
                 // 记录文件变更记录
                 if (StrUtil.isNotEmpty(track.getChangesurl())) {
                     try {

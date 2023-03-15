@@ -1,5 +1,6 @@
 package com.faber.api.disk.store.biz;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.faber.api.disk.store.entity.StoreFile;
 import org.springframework.stereotype.Service;
 
@@ -17,11 +18,18 @@ import com.faber.core.web.biz.BaseBiz;
 @Service
 public class StoreFileHisBiz extends BaseBiz<StoreFileHisMapper,StoreFileHis> {
 
+    public Integer getStoreFileMaxVer(Integer storeFileId) {
+        QueryWrapper<StoreFileHis> wrapper = new QueryWrapper<>();
+        wrapper.eq("storeFileId", storeFileId);
+        return getMaxSort(wrapper, "ver");
+    }
+
     public void saveSnapshot(StoreFile storeFile) {
         StoreFileHis storeFileHis = new StoreFileHis();
         storeFileHis.setStoreFileId(storeFile.getId());
         storeFileHis.setFileSaveId(storeFile.getFileId());
         storeFileHis.setFileName(storeFile.getName());
+        storeFileHis.setVer(1);
         super.save(storeFileHis);
     }
 
