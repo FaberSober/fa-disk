@@ -56,6 +56,9 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     @Resource
     StoreFileTagBiz storeFileTagBiz;
 
+    @Resource
+    StoreFileHisBiz storeFileHisBiz;
+
     @Override
     protected void enhanceTreeQuery(QueryWrapper<StoreFile> wrapper) {
         wrapper.eq("dir", true);
@@ -125,6 +128,11 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
 
         // update dir count
         this.syncDirSize(entity.getParentId());
+
+        // 保持历史版本
+        if (!entity.getDir()) {
+            storeFileHisBiz.saveSnapshot(entity);
+        }
 
         return true;
     }

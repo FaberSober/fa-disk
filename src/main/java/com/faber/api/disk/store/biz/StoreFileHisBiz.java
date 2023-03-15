@@ -20,7 +20,7 @@ public class StoreFileHisBiz extends BaseBiz<StoreFileHisMapper,StoreFileHis> {
 
     public Integer getStoreFileMaxVer(Integer storeFileId) {
         QueryWrapper<StoreFileHis> wrapper = new QueryWrapper<>();
-        wrapper.eq("storeFileId", storeFileId);
+        wrapper.eq("store_file_id", storeFileId);
         return getMaxSort(wrapper, "ver");
     }
 
