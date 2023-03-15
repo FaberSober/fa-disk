@@ -1,6 +1,7 @@
 package com.faber.api.disk.doc.rest;
 
 import com.faber.api.base.doc.dto.Track;
+import com.faber.api.base.doc.models.enums.Mode;
 import com.faber.api.base.doc.vo.ret.OnlyofficeRet;
 import com.faber.api.base.doc.vo.ret.OpenFileRetVo;
 import com.faber.api.disk.doc.biz.DiskOnlyofficeBiz;
@@ -31,8 +32,8 @@ public class DiskOnlyofficeController extends BaseResHandler {
     @FaLogOpr("打开文件Token")
     @GetMapping("/openFile/{storeFileId}")
     @ResponseBody
-    public Ret<OpenFileRetVo> openFile(@PathVariable("storeFileId") Integer storeFileId) {
-        OpenFileRetVo data = diskOnlyofficeBiz.openFile(storeFileId);
+    public Ret<OpenFileRetVo> openFile(@PathVariable("storeFileId") Integer storeFileId, @RequestParam(value = "mode", required = false) String mode) {
+        OpenFileRetVo data = diskOnlyofficeBiz.openFile(storeFileId, Mode.valueOf(mode));
         return ok(data);
     }
 

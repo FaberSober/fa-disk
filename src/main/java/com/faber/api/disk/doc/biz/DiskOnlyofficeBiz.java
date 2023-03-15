@@ -9,6 +9,7 @@ import com.faber.api.base.doc.dto.Action;
 import com.faber.api.base.doc.dto.Track;
 import com.faber.api.base.doc.manager.jwt.JwtManager;
 import com.faber.api.base.doc.models.enums.DocumentType;
+import com.faber.api.base.doc.models.enums.Mode;
 import com.faber.api.base.doc.models.enums.Type;
 import com.faber.api.base.doc.models.filemodel.Document;
 import com.faber.api.base.doc.models.filemodel.EditorConfig;
@@ -60,9 +61,9 @@ public class DiskOnlyofficeBiz {
     @Resource
     UserBiz userBiz;
 
-    public OpenFileRetVo openFile(Integer storeFileId) {
+    public OpenFileRetVo openFile(Integer storeFileId, Mode mode) {
         OpenFileRetVo retVo = new OpenFileRetVo();
-        retVo.setFileModel(openFileModal(storeFileId));
+        retVo.setFileModel(openFileModal(storeFileId, mode));
         retVo.setDocumentApi(faSetting.getOnlyoffice().getOnlyofficeServer());
         return retVo;
     }
@@ -71,9 +72,10 @@ public class DiskOnlyofficeBiz {
      * 打开office文件，生成与onlyoffice服务交互的jwt token，返回打开文件的配置
      *
      * @param storeFileId {@link StoreFile#getId()}
+     * @param mode
      * @return
      */
-    public FileModel openFileModal(Integer storeFileId) {
+    public FileModel openFileModal(Integer storeFileId, Mode mode) {
         StoreFile storeFile = storeFileBiz.getById(storeFileId);
         String fileId = storeFile.getFileId();
 
@@ -98,6 +100,7 @@ public class DiskOnlyofficeBiz {
         EditorConfig editorConfig = fileModel.getEditorConfig();
         editorConfig.setLang("zh");
         editorConfig.setCallbackUrl(faSetting.getOnlyoffice().getCallbackServer() + "api/disk/doc/onlyoffice/track"); // 回调
+        editorConfig.setMode(mode);
 
         Map<String, Object> map = new HashMap<>();
         map.put("type", fileModel.getType());
