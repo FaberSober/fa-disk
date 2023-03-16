@@ -158,28 +158,6 @@ public class DiskOnlyofficeBiz {
                 String userId = action.getUserid();
                 userBiz.setUserLogin(userId);
 
-                // 记录文件历史记录
-                StoreFileHis storeFileHis = new StoreFileHis();
-                storeFileHis.setStoreFileId(storeFile.getId());
-                storeFileHis.setFileSaveId(storeFile.getFileId());
-                storeFileHis.setFileName(storeFile.getName());
-
-                // 增加版本号
-                int curVer = storeFileHisBiz.getStoreFileMaxVer(storeFile.getId());
-                storeFileHis.setVer(curVer + 1);
-
-                // 记录文件变更记录
-                if (StrUtil.isNotEmpty(track.getChangesurl())) {
-                    try {
-                        FileSave changeFileSave = fileSaveBiz.download(track.getChangesurl(), "changes.zip");
-                        storeFileHis.setChangeFileId(changeFileSave.getId());
-                    } catch (Exception e) {
-                        log.error(e.getMessage(), e);
-                    }
-                }
-
-                storeFileHisBiz.save(storeFileHis);
-
                 try {
                     // 需要保存的文件URL，将此URL下载保存到本地。
                     FileSave fileSave = fileSaveBiz.download(track.getUrl(), storeFile.getName());
@@ -189,6 +167,28 @@ public class DiskOnlyofficeBiz {
                             .set(StoreFile::getFileId, fileSave.getId())
                             .eq(StoreFile::getId, storeFile.getId())
                             .update();
+
+                    // 记录文件历史记录
+                    StoreFileHis storeFileHis = new StoreFileHis();
+                    storeFileHis.setStoreFileId(storeFile.getId());
+                    storeFileHis.setFileSaveId(fileSave.getId());
+                    storeFileHis.setFileName(storeFile.getName());
+
+                    // 增加版本号
+                    int curVer = storeFileHisBiz.getStoreFileMaxVer(storeFile.getId());
+                    storeFileHis.setVer(curVer + 1);
+
+                    // 记录文件变更记录
+                    if (StrUtil.isNotEmpty(track.getChangesurl())) {
+                        try {
+                            FileSave changeFileSave = fileSaveBiz.download(track.getChangesurl(), "changes.zip");
+                            storeFileHis.setChangeFileId(changeFileSave.getId());
+                        } catch (Exception e) {
+                            log.error(e.getMessage(), e);
+                        }
+                    }
+
+                    storeFileHisBiz.save(storeFileHis);
                 } catch (Exception e) {
                     log.error(e.getMessage(), e);
                 }
