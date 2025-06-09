@@ -5,7 +5,7 @@ import com.faber.config.quartz.BaseJob;
 import com.faber.core.annotation.FaJob;
 import lombok.extern.slf4j.Slf4j;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 /**
  * 同步文件库信息

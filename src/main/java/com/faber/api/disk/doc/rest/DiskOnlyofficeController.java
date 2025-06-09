@@ -12,7 +12,7 @@ import com.faber.core.utils.BaseResHandler;
 import com.faber.core.vo.msg.Ret;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 
 /**
  * Onlyoffice在线文档对接

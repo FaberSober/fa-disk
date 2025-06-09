@@ -7,7 +7,7 @@ import com.faber.api.disk.store.entity.StoreFileTag;
 import com.faber.api.disk.store.mapper.StoreFileTagMapper;
 import com.faber.core.web.biz.BaseBiz;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.io.Serializable;
 
 /**

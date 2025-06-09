@@ -7,7 +7,7 @@ import com.faber.api.disk.store.mapper.StoreBucketUserMapper;
 import com.faber.core.web.biz.BaseBiz;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.List;
 
 /**
