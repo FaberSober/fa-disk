@@ -4,8 +4,8 @@ import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.ZipUtil;
-import com.alicp.jetcache.anno.CacheInvalidate;
-import com.alicp.jetcache.anno.Cached;
+//import com.alicp.jetcache.anno.CacheInvalidate;
+//import com.alicp.jetcache.anno.Cached;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.faber.api.base.admin.biz.FileSaveBiz;
 import com.faber.api.base.admin.entity.FileSave;
@@ -64,7 +64,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         wrapper.eq("dir", true);
     }
 
-    @Cached(name = "store:file:fullpath:", key = "#id", expire = 3600)
+//    @Cached(name = "store:file:fullpath:", key = "#id", expire = 3600)
     public List<StoreFile> getFullPath(Integer id) {
         return super.treePathLine(id);
     }
@@ -137,7 +137,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         return true;
     }
 
-    @CacheInvalidate(name = "store:file:fullpath:", key = "#entity.id")
+//    @CacheInvalidate(name = "store:file:fullpath:", key = "#entity.id")
     @Override
     public boolean updateById(StoreFile entity) {
         long count = lambdaQuery()
@@ -175,7 +175,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     @Override
     @Transactional
     public boolean removeById(Serializable id) {
-        StoreFile file = baseMapper.selectByIdPure(id);
+        StoreFile file = baseMapper.selectById(id);
 
         // mark delete action
         lambdaUpdate().eq(StoreFile::getId, id).set(StoreFile::getDeleteAction, true).update();
@@ -207,7 +207,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
                 List<StoreFile> child = baseMapper.queryChildren(item.getId());
                 this.loopDelete(child);
             }
-            baseMapper.deletePermanentById(item.getId());
+            baseMapper.deleteByIdIgnoreLogic(item.getId());
         }
     }
 
@@ -218,7 +218,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         List<StoreFile> child = baseMapper.queryChildren((Integer) id);
         loopDeletePre(child);
 
-        baseMapper.deletePermanentById(id);
+        baseMapper.deleteByIdIgnoreLogic(id);
     }
 
     public void downloadZip(List<Integer> ids) throws IOException {
@@ -400,7 +400,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     public void putBack(List<Integer> ids) {
         for (Integer id : ids) {
             // put file back
-            StoreFile file = baseMapper.selectByIdPure(id);
+            StoreFile file = baseMapper.selectById(id);
             this.putFileBack(file, file.getParentId());
 
             // loop children put back
@@ -415,7 +415,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     public void putBackToDir(StoreFilesMoveTo params) {
         for (Integer id : params.getFileIds()) {
             // put file back
-            StoreFile file = baseMapper.selectByIdPure(id);
+            StoreFile file = baseMapper.selectById(id);
             this.putFileBack(file, params.getToDirId());
 
             // loop children put back
@@ -430,7 +430,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         // check toDirId exists
         String fullPath = ROOT_DIR_NAME;
         if (toDirId > 0) {
-            StoreFile parentDir = baseMapper.selectByIdPure(toDirId);
+            StoreFile parentDir = baseMapper.selectById(toDirId);
             fullPath = parentDir.getFullPath();
             if (parentDir == null || !parentDir.getDir()) {
                 throw new BuzzException("目标文件夹不存在，请确认");
