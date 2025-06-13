@@ -1,9 +1,7 @@
 package com.faber;
 
-import cn.xuyanwu.spring.file.storage.EnableFileStorage;
-import com.alicp.jetcache.anno.config.EnableMethodCache;
 import com.dtflys.forest.springboot.annotation.ForestScan;
-import com.yomahub.tlog.core.enhance.bytes.AspectLogEnhance;
+import org.dromara.x.file.storage.spring.EnableFileStorage;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.web.server.ConfigurableWebServerFactory;
@@ -22,12 +20,12 @@ import java.util.Set;
 @EnableScheduling
 @EnableTransactionManagement
 @ServletComponentScan
-@EnableMethodCache(basePackages = "com.faber")
+//@EnableMethodCache(basePackages = "com.faber")
 @ForestScan("com.faber")
 @EnableFileStorage // https://spring-file-storage.xuyanwu.cn
 public class FaTestApp {
 
-    static { AspectLogEnhance.enhance(); }//进行日志增强，自动判断日志框架
+//    static { AspectLogEnhance.enhance(); }//进行日志增强，自动判断日志框架
 
     public static void main(String[] args) {
         new SpringApplicationBuilder(FaTestApp.class).run(args);
