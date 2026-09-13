@@ -214,7 +214,7 @@ CREATE TRIGGER "disk_store_tag__upd_time" BEFORE UPDATE ON "disk_store_tag" FOR 
 -- Records of base_job
 -- ----------------------------
 BEGIN;
-INSERT INTO "base_job" ("id", "job_name", "cron", "status", "clazz_path", "job_desc", "crt_time", "crt_user", "crt_name", "crt_host", "upd_time", "upd_user", "upd_name", "upd_host", "deleted") VALUES (2, '[网盘][文件库]同步文件库信息', '0 0/1 * * * ?', TRUE, 'com.faber.api.disk.store.jobs.JobSyncBucketInfo', NULL, '2022-12-30 16:33:47', '1', '超级管理员', '127.0.0.1', '2022-12-30 16:34:10', '1', '超级管理员', '127.0.0.1', FALSE);
+INSERT INTO "base_job" ("job_name", "cron", "status", "clazz_path", "job_desc", "crt_time", "crt_user", "crt_name", "crt_host", "upd_time", "upd_user", "upd_name", "upd_host", "deleted") VALUES ('[网盘][文件库]同步文件库信息', '0 0/1 * * * ?', TRUE, 'com.faber.api.disk.store.jobs.JobSyncBucketInfo', NULL, '2022-12-30 16:33:47', '1', '超级管理员', '127.0.0.1', '2022-12-30 16:34:10', '1', '超级管理员', '127.0.0.1', FALSE);
 COMMIT;
 
 -- ----------------------------
@@ -237,4 +237,3 @@ SELECT setval(
     COALESCE((SELECT MAX("id") FROM "base_job"), 1),
     TRUE
 );
-
