@@ -27,6 +27,7 @@ import com.github.pagehelper.PageInfo;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.annotation.Resource;
 import java.io.File;
@@ -322,7 +323,9 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         this.syncFullPath(entity);
         entity.setDeleteAction(false);
 
-        super.save(entity);
+        if (!super.save(entity)) {
+            throw new BuzzException("文件记录保存失败");
+        }
 
         // update dir count
         this.syncDirSize(entity.getParentId());
@@ -333,6 +336,31 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         }
 
         return true;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public StoreFile upload(MultipartFile file, Integer bucketId, Integer parentId) {
+        if (file == null || file.isEmpty()) {
+            throw new BuzzException("上传文件不能为空");
+        }
+
+        FileSave fileSave = fileSaveBiz.upload(file);
+        StoreFile entity = new StoreFile();
+        entity.setBucketId(bucketId);
+        entity.setParentId(parentId);
+        entity.setDir(false);
+        entity.setFileId(fileSave.getId());
+        try {
+            save(entity);
+            return entity;
+        } catch (RuntimeException e) {
+            try {
+                fileSaveBiz.cleanupUploadedFile(fileSave);
+            } catch (RuntimeException cleanupException) {
+                _logger.error("上传失败后的物理文件清理失败, fileId={}", fileSave.getId(), cleanupException);
+            }
+            throw e;
+        }
     }
 
 //    @CacheInvalidate(name = "store:file:fullpath:", key = "#entity.id")

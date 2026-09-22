@@ -14,6 +14,7 @@ import com.faber.core.vo.msg.TableRet;
 import com.faber.core.vo.query.BasePageQuery;
 import com.faber.core.web.rest.BaseTreeController;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
@@ -68,6 +69,17 @@ public class StoreFileController extends BaseTreeController<StoreFileBiz, StoreF
     public Ret<Boolean> syncDir(@RequestParam("dirId") Integer dirId) {
         baseBiz.syncDir(dirId);
         return ok();
+    }
+
+    @FaLogOpr(value = "上传文件到网盘", crud = LogCrudEnum.C)
+    @PostMapping("/upload")
+    @ResponseBody
+    public Ret<StoreFile> upload(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("bucketId") Integer bucketId,
+            @RequestParam(value = "parentId", defaultValue = "0") Integer parentId
+    ) {
+        return ok(baseBiz.upload(file, bucketId, parentId));
     }
 
     @FaLogOpr(value = "检索文件", crud = LogCrudEnum.R)
