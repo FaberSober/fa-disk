@@ -31,6 +31,12 @@
         SELECT t.*
          FROM disk_store_file t
         WHERE t.deleted = #{query.deleted}
+        <if test="query.accessibleBucketIds != null and query.accessibleBucketIds.size != 0">
+            AND t.bucket_id IN
+            <foreach item="bucketId" collection="query.accessibleBucketIds" open="(" separator="," close=")">
+                #{bucketId}
+            </foreach>
+        </if>
         <if test="query.bucketId != null">
             AND t.bucket_id = #{query.bucketId}
         </if>

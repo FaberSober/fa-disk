@@ -20,9 +20,11 @@ import com.faber.core.exception.BuzzException;
 import com.faber.core.utils.FaFileUtils;
 import com.faber.core.vo.msg.TableRet;
 import com.faber.core.vo.query.BasePageQuery;
+import com.faber.core.vo.query.QueryParams;
 import com.faber.core.web.biz.BaseTreeBiz;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,7 @@ import java.io.Serializable;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -53,15 +56,88 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     @Resource
     StoreTagBiz storeTagBiz;
 
+    @Lazy
     @Resource
     StoreFileTagBiz storeFileTagBiz;
 
+    @Lazy
     @Resource
     StoreFileHisBiz storeFileHisBiz;
 
+    @Resource
+    StoreBucketUserBiz storeBucketUserBiz;
+
     @Override
     protected void enhanceTreeQuery(QueryWrapper<StoreFile> wrapper) {
+        wrapper.in("bucket_id", storeBucketUserBiz.getAccessibleBucketIds());
         wrapper.eq("dir", true);
+    }
+
+    @Override
+    public QueryWrapper<StoreFile> parseQuery(QueryParams query) {
+        QueryWrapper<StoreFile> wrapper = super.parseQuery(query);
+        wrapper.in("bucket_id", storeBucketUserBiz.getAccessibleBucketIds());
+        return wrapper;
+    }
+
+    @Override
+    public List<StoreFile> list() {
+        QueryWrapper<StoreFile> wrapper = new QueryWrapper<>();
+        wrapper.in("bucket_id", storeBucketUserBiz.getAccessibleBucketIds());
+        return super.list(wrapper);
+    }
+
+    @Override
+    public List<StoreFile> getAllChildrenFromNode(Serializable id) {
+        requireAccessible(Integer.valueOf(id.toString()));
+        return super.getAllChildrenFromNode(id);
+    }
+
+    public StoreFile requireAccessible(Integer id) {
+        return requireAccessible(id, false);
+    }
+
+    public StoreFile requireAccessible(Integer id, boolean includeDeleted) {
+        if (id == null) {
+            throw new BuzzException("文件ID不能为空");
+        }
+        StoreFile file = includeDeleted ? baseMapper.selectByIdIgnoreLogic(id) : super.getById(id);
+        if (file == null) {
+            throw new BuzzException("文件不存在");
+        }
+        storeBucketUserBiz.requireAccessible(file.getBucketId());
+        return file;
+    }
+
+    public List<Integer> getAccessibleFileIds() {
+        List<Integer> ids = lambdaQuery()
+                .select(StoreFile::getId)
+                .in(StoreFile::getBucketId, storeBucketUserBiz.getAccessibleBucketIds())
+                .list()
+                .stream()
+                .map(StoreFile::getId)
+                .collect(Collectors.toList());
+        return ids.isEmpty() ? List.of(0) : ids;
+    }
+
+    private void requireParent(Integer bucketId, Integer parentId) {
+        if (parentId == null || parentId == 0) return;
+        StoreFile parent = requireAccessible(parentId);
+        if (!parent.getDir() || !Objects.equals(parent.getBucketId(), bucketId)) {
+            throw new BuzzException("目标文件夹不存在，请确认");
+        }
+    }
+
+    private void prepareQuery(BasePageQuery<StoreFileQueryVo> query, boolean deleted) {
+        if (query == null || query.getQuery() == null) {
+            throw new BuzzException("文件查询参数不能为空");
+        }
+        StoreFileQueryVo fileQuery = query.getQuery();
+        fileQuery.setDeleted(deleted);
+        fileQuery.setAccessibleBucketIds(storeBucketUserBiz.getAccessibleBucketIds());
+        if (fileQuery.getBucketId() != null) {
+            storeBucketUserBiz.requireAccessible(fileQuery.getBucketId());
+        }
     }
 
 //    @Cached(name = "store:file:fullpath:", key = "#id", expire = 3600)
@@ -89,10 +165,51 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     }
 
     @Override
+    public StoreFile getById(Serializable id) {
+        StoreFile file = super.getById(id);
+        if (file != null) {
+            storeBucketUserBiz.requireAccessible(file.getBucketId());
+        }
+        return file;
+    }
+
+    @Override
+    public StoreFile getDetailById(Serializable id) {
+        StoreFile file = getById(id);
+        if (file != null) {
+            decorateOne(file);
+        }
+        return file;
+    }
+
+    @Override
+    public <ID extends Serializable> List<StoreFile> getByIds(List<ID> ids) {
+        if (ids != null) {
+            ids.forEach(id -> requireAccessible(Integer.valueOf(id.toString())));
+        }
+        return super.getByIds(ids);
+    }
+
+    @Override
     public boolean save(StoreFile entity) {
+        if (entity == null || entity.getBucketId() == null) {
+            throw new BuzzException("文件库ID不能为空");
+        }
+        if (entity.getDir() == null) {
+            throw new BuzzException("文件类型不能为空");
+        }
+        storeBucketUserBiz.requireAccessible(entity.getBucketId());
+        if (entity.getParentId() == null) {
+            entity.setParentId(0);
+        }
+        requireParent(entity.getBucketId(), entity.getParentId());
+
         // store file
         if (!entity.getDir()) { // 文件类型，存储文件
             FileSave fileSave = fileSaveBiz.getById(entity.getFileId());
+            if (fileSave == null) {
+                throw new BuzzException("上传文件不存在");
+            }
 
             entity.setName(fileSave.getOriginalFilename());
             entity.setSize(fileSave.getSize());
@@ -140,6 +257,16 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
 //    @CacheInvalidate(name = "store:file:fullpath:", key = "#entity.id")
     @Override
     public boolean updateById(StoreFile entity) {
+        StoreFile current = requireAccessible(entity == null ? null : entity.getId());
+        if (entity.getBucketId() == null) entity.setBucketId(current.getBucketId());
+        if (!Objects.equals(entity.getBucketId(), current.getBucketId())) {
+            throw new BuzzException("文件不能跨库修改");
+        }
+        if (entity.getParentId() == null) entity.setParentId(current.getParentId());
+        if (entity.getDir() == null) entity.setDir(current.getDir());
+        if (entity.getName() == null) entity.setName(current.getName());
+        requireParent(entity.getBucketId(), entity.getParentId());
+
         long count = lambdaQuery()
                 .eq(StoreFile::getBucketId, entity.getBucketId())
                 .eq(StoreFile::getDir, entity.getDir())
@@ -153,13 +280,41 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     }
 
     public void updateInfo(StoreFile entity) {
-        super.updateById(entity);
+        StoreFile current = requireAccessible(entity == null ? null : entity.getId());
+        current.setInfo(entity.getInfo());
+        this.updateById(current);
     }
 
     public void updateInfoBatch(List<StoreFile> list) {
         for (StoreFile storeFile : list) {
             this.updateInfo(storeFile);
         }
+    }
+
+    @Override
+    public boolean saveBatch(Collection<StoreFile> entityList) {
+        if (entityList == null) return true;
+        entityList.forEach(this::save);
+        return true;
+    }
+
+    @Override
+    public boolean updateBatchById(Collection<StoreFile> entityList) {
+        if (entityList == null) return true;
+        entityList.forEach(this::updateById);
+        return true;
+    }
+
+    @Override
+    public boolean saveOrUpdate(StoreFile entity) {
+        return entity.getId() == null ? save(entity) : updateById(entity);
+    }
+
+    @Override
+    public boolean saveOrUpdateBatch(Collection<StoreFile> entityList) {
+        if (entityList == null) return true;
+        entityList.forEach(this::saveOrUpdate);
+        return true;
     }
 
     public void loopDelete(List<StoreFile> list) {
@@ -175,7 +330,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     @Override
     @Transactional
     public boolean removeById(Serializable id) {
-        StoreFile file = baseMapper.selectById(id);
+        StoreFile file = requireAccessible(Integer.valueOf(id.toString()));
 
         // mark delete action
         lambdaUpdate().eq(StoreFile::getId, id).set(StoreFile::getDeleteAction, true).update();
@@ -201,6 +356,13 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         return true;
     }
 
+    @Override
+    @Transactional
+    public void removeBatchByIds(List<Serializable> ids) {
+        if (ids == null) return;
+        ids.forEach(this::removeById);
+    }
+
     public void loopDeletePre(List<StoreFile> list) {
         for (StoreFile item : list) {
             if (item.getDir()) {
@@ -214,6 +376,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     @Override
     @Transactional
     public void removePerById(Serializable id) {
+        requireAccessible(Integer.valueOf(id.toString()), true);
         // remove child item
         List<StoreFile> child = baseMapper.queryChildren((Integer) id);
         loopDeletePre(child);
@@ -222,6 +385,8 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     }
 
     public void downloadZip(List<Integer> ids) throws IOException {
+        if (ids == null || ids.isEmpty()) throw new BuzzException("未找到文件，请确认");
+        ids.forEach(this::requireAccessible);
         List<StoreFile> list = lambdaQuery()
                 .in(StoreFile::getId, ids)
                 .orderByDesc(StoreFile::getDir)
@@ -273,8 +438,20 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     }
 
     public void moveToDir(StoreFilesMoveTo params) {
+        if (params == null || params.getToDirId() == null) {
+            throw new BuzzException("目标文件夹不能为空");
+        }
+        Integer bucketId = null;
         for (Integer fileId : params.getFileIds()) {
-            StoreFile storeFile = super.getById(fileId);
+            StoreFile storeFile = requireAccessible(fileId);
+            if (bucketId == null) bucketId = storeFile.getBucketId();
+            if (!Objects.equals(bucketId, storeFile.getBucketId())) {
+                throw new BuzzException("不能跨库操作文件");
+            }
+        }
+        requireParent(bucketId, params.getToDirId());
+        for (Integer fileId : params.getFileIds()) {
+            StoreFile storeFile = requireAccessible(fileId);
             storeFile.setParentId(params.getToDirId());
             this.updateById(storeFile);
         }
@@ -283,8 +460,20 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     }
 
     public void copyToDir(StoreFilesMoveTo params) {
+        if (params == null || params.getToDirId() == null) {
+            throw new BuzzException("目标文件夹不能为空");
+        }
+        Integer bucketId = null;
         for (Integer fileId : params.getFileIds()) {
-            StoreFile storeFile = super.getById(fileId);
+            StoreFile storeFile = requireAccessible(fileId);
+            if (bucketId == null) bucketId = storeFile.getBucketId();
+            if (!Objects.equals(bucketId, storeFile.getBucketId())) {
+                throw new BuzzException("不能跨库操作文件");
+            }
+        }
+        requireParent(bucketId, params.getToDirId());
+        for (Integer fileId : params.getFileIds()) {
+            StoreFile storeFile = requireAccessible(fileId);
             Integer oldId = storeFile.getId();
 
             storeFile.setParentId(params.getToDirId());
@@ -305,23 +494,34 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     }
 
     public void syncFileTags(Integer fileId) {
+        StoreFile storeFile = requireAccessible(fileId);
         StoreFile.Tag[] tags = storeFileTagBiz.lambdaQuery()
                 .eq(StoreFileTag::getFileId, fileId)
                 .list()
                 .stream().map(i -> {
-                    StoreTag tag = storeTagBiz.getByIdWithCache(i.getTagId());
+                    StoreTag tag = storeTagBiz.requireAccessible(i.getTagId());
+                    if (!Objects.equals(storeFile.getBucketId(), tag.getBucketId())) {
+                        throw new BuzzException("文件标签不能跨库关联");
+                    }
                     return new StoreFile.Tag(i.getId(), i.getTagId(), tag.getName(), tag.getColor());
                 })
                 .toArray(StoreFile.Tag[]::new);
 
-        StoreFile storeFile = super.getById(fileId);
         storeFile.setTags(tags);
         super.updateById(storeFile);
     }
 
     public void addTags(StoreFilesAddTags params) {
+        if (params == null || params.getFileIds() == null || params.getTagIds() == null) {
+            throw new BuzzException("文件和标签不能为空");
+        }
         for (Integer fileId : params.getFileIds()) {
+            StoreFile file = requireAccessible(fileId);
             for (Integer tagId : params.getTagIds()) {
+                StoreTag tag = storeTagBiz.requireAccessible(tagId);
+                if (!Objects.equals(file.getBucketId(), tag.getBucketId())) {
+                    throw new BuzzException("文件和标签不能跨库操作");
+                }
                 long count = storeFileTagBiz.lambdaQuery()
                         .eq(StoreFileTag::getFileId, fileId)
                         .eq(StoreFileTag::getTagId, tagId)
@@ -348,12 +548,16 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     }
 
     public void syncDir(Integer dirId) {
+        if (dirId != null && dirId > 0) requireAccessible(dirId);
         List<StoreFile> dirs = this.getFullPath(dirId);
         List<String> dirNames = dirs.stream().map(i -> i.getName()).collect(Collectors.toList());
         dirNames.add(0, ROOT_DIR_NAME);
         String fullPath = ArrayUtil.join(dirNames.toArray(), ",", "#", "#");
 
-        List<StoreFile> list = lambdaQuery().eq(StoreFile::getParentId, dirId).list();
+        List<StoreFile> list = lambdaQuery()
+                .in(StoreFile::getBucketId, storeBucketUserBiz.getAccessibleBucketIds())
+                .eq(StoreFile::getParentId, dirId)
+                .list();
         for (StoreFile item : list) {
             item.setFullPath(fullPath);
             this.updateById(item);
@@ -365,19 +569,19 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     }
 
     public List<StoreFile> queryFile(BasePageQuery<StoreFileQueryVo> query) {
-        query.getQuery().setDeleted(false);
+        prepareQuery(query, false);
         return baseMapper.queryFile(query.getQuery(), query.getSorter());
     }
 
     public TableRet<StoreFile> queryFilePage(BasePageQuery<StoreFileQueryVo> query) {
-        query.getQuery().setDeleted(false);
+        prepareQuery(query, false);
         PageInfo<StoreFile> info = PageHelper.startPage(query.getCurrent(), query.getPageSize())
                 .doSelectPageInfo(() -> baseMapper.queryFile(query.getQuery(), query.getSorter()));
         return new TableRet<>(info);
     }
 
     public TableRet<StoreFile> queryTrashFilePage(BasePageQuery<StoreFileQueryVo> query) {
-        query.getQuery().setDeleted(true);
+        prepareQuery(query, true);
         PageInfo<StoreFile> info = PageHelper.startPage(query.getCurrent(), query.getPageSize())
                 .doSelectPageInfo(() -> baseMapper.queryFile(query.getQuery(), query.getSorter()));
         return new TableRet<>(info);
@@ -400,7 +604,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     public void putBack(List<Integer> ids) {
         for (Integer id : ids) {
             // put file back
-            StoreFile file = baseMapper.selectById(id);
+            StoreFile file = requireAccessible(id, true);
             this.putFileBack(file, file.getParentId());
 
             // loop children put back
@@ -413,9 +617,13 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
 
     @Transactional
     public void putBackToDir(StoreFilesMoveTo params) {
+        if (params == null || params.getToDirId() == null) {
+            throw new BuzzException("目标文件夹不能为空");
+        }
         for (Integer id : params.getFileIds()) {
             // put file back
-            StoreFile file = baseMapper.selectById(id);
+            StoreFile file = requireAccessible(id, true);
+            requireParent(file.getBucketId(), params.getToDirId());
             this.putFileBack(file, params.getToDirId());
 
             // loop children put back
@@ -427,14 +635,15 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     }
 
     public void putFileBack(StoreFile file, Integer toDirId) {
+        storeBucketUserBiz.requireAccessible(file.getBucketId());
         // check toDirId exists
         String fullPath = ROOT_DIR_NAME;
         if (toDirId > 0) {
-            StoreFile parentDir = baseMapper.selectById(toDirId);
-            fullPath = parentDir.getFullPath();
-            if (parentDir == null || !parentDir.getDir()) {
+            StoreFile parentDir = requireAccessible(toDirId);
+            if (!parentDir.getDir() || !Objects.equals(parentDir.getBucketId(), file.getBucketId())) {
                 throw new BuzzException("目标文件夹不存在，请确认");
             }
+            fullPath = parentDir.getFullPath();
         }
 
         // check file name single
@@ -452,6 +661,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         // put file back
         baseMapper.putFileTo(file.getId(), toDirId);
 
+        file.setParentId(toDirId);
         this.syncFullPath(file);
         lambdaUpdate().eq(StoreFile::getId, file.getId())
                 .set(StoreFile::getFullPath, file.getFullPath())

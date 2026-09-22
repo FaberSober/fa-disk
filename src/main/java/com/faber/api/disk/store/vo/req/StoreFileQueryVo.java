@@ -11,6 +11,10 @@ public class StoreFileQueryVo implements Serializable {
     private Boolean deleted;
 
     private Integer bucketId;
+
+    /** 服务端填充的可访问文件库范围，忽略客户端传值。 */
+    private List<Integer> accessibleBucketIds;
+
     private Integer parentId;
 
     /**
