@@ -5,10 +5,10 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import com.faber.core.annotation.*;
 import com.faber.core.bean.BaseDelEntity;
 import com.faber.core.config.easyexcel.type.FaJsonObj;
+import com.faber.core.config.mybatis.handler.UniversalJsonTypeHandler;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -70,7 +70,7 @@ public class StoreFile extends BaseDelEntity {
     @ExcelProperty("完整路径")
     private String fullPath;
 
-    @TableField(typeHandler = JacksonTypeHandler.class)
+    @TableField(typeHandler = UniversalJsonTypeHandler.class)
     @ExcelProperty("标签")
     private Tag[] tags;
 
