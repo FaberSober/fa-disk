@@ -26,4 +26,6 @@ public interface StoreFileMapper extends FaBaseMapper<StoreFile> {
 
     long countByBucketId(@Param("bucketId") Integer bucketId);
 
+    long countDeletedById(@Param("id") Integer id);
+
 }

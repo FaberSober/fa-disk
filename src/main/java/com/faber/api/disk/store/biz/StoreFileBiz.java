@@ -34,8 +34,12 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -107,6 +111,25 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         }
         storeBucketUserBiz.requireAccessible(file.getBucketId());
         return file;
+    }
+
+    private StoreFile requireTrash(Integer id) {
+        StoreFile file = requireAccessible(id, true);
+        if (baseMapper.countDeletedById(id) == 0) {
+            throw new BuzzException("文件不在回收站");
+        }
+        return file;
+    }
+
+    private Integer parseFileId(Serializable id) {
+        if (id == null) {
+            throw new BuzzException("文件ID不能为空");
+        }
+        try {
+            return Integer.valueOf(id.toString());
+        } catch (NumberFormatException e) {
+            throw new BuzzException("文件ID格式错误");
+        }
     }
 
     public List<Integer> getAccessibleFileIds() {
@@ -330,16 +353,17 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     @Override
     @Transactional
     public boolean removeById(Serializable id) {
-        StoreFile file = requireAccessible(Integer.valueOf(id.toString()));
+        Integer fileId = parseFileId(id);
+        StoreFile file = requireAccessible(fileId);
 
         // mark delete action
-        lambdaUpdate().eq(StoreFile::getId, id).set(StoreFile::getDeleteAction, true).update();
+        lambdaUpdate().eq(StoreFile::getId, fileId).set(StoreFile::getDeleteAction, true).update();
 
         // 删除子元素
-        List<StoreFile> child = lambdaQuery().eq(StoreFile::getParentId, id).list();
+        List<StoreFile> child = lambdaQuery().eq(StoreFile::getParentId, fileId).list();
         loopDelete(child);
 
-        super.removeById(id);
+        baseMapper.deleteById(fileId);
 
         // sync parent Dir size
         this.syncDirSize(file.getParentId());
@@ -350,24 +374,20 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     @Override
     @Transactional
     public boolean removeBatchByIds(Collection<?> list) {
-        list.forEach(i -> {
-            this.removeById((Serializable) i);
-        });
-        return true;
+        return removeBatchSafely(list);
     }
 
     @Override
     @Transactional
     public void removeBatchByIds(List<Serializable> ids) {
-        if (ids == null) return;
-        ids.forEach(this::removeById);
+        removeBatchSafely(ids);
     }
 
     public void loopDeletePre(List<StoreFile> list) {
         for (StoreFile item : list) {
             if (item.getDir()) {
                 List<StoreFile> child = baseMapper.queryChildren(item.getId());
-                this.loopDelete(child);
+                this.loopDeletePre(child);
             }
             baseMapper.deleteByIdIgnoreLogic(item.getId());
         }
@@ -376,12 +396,13 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
     @Override
     @Transactional
     public void removePerById(Serializable id) {
-        requireAccessible(Integer.valueOf(id.toString()), true);
+        Integer fileId = parseFileId(id);
+        requireTrash(fileId);
         // remove child item
-        List<StoreFile> child = baseMapper.queryChildren((Integer) id);
+        List<StoreFile> child = baseMapper.queryChildren(fileId);
         loopDeletePre(child);
 
-        baseMapper.deleteByIdIgnoreLogic(id);
+        baseMapper.deleteByIdIgnoreLogic(fileId);
     }
 
     public void downloadZip(List<Integer> ids) throws IOException {
@@ -602,36 +623,68 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
 
     @Transactional
     public void putBack(List<Integer> ids) {
-        for (Integer id : ids) {
-            // put file back
-            StoreFile file = requireAccessible(id, true);
-            this.putFileBack(file, file.getParentId());
-
-            // loop children put back
-            List<StoreFile> child = baseMapper.queryChildren(id);
-            loopPutBack(child, file.getId());
-
-            this.syncDirSize(file.getParentId());
+        for (StoreFile file : getRestoreRoots(ids)) {
+            restoreTree(file, file.getParentId());
         }
     }
 
     @Transactional
     public void putBackToDir(StoreFilesMoveTo params) {
-        if (params == null || params.getToDirId() == null) {
+        if (params == null || params.getToDirId() == null || params.getFileIds() == null || params.getFileIds().isEmpty()) {
             throw new BuzzException("目标文件夹不能为空");
         }
-        for (Integer id : params.getFileIds()) {
-            // put file back
-            StoreFile file = requireAccessible(id, true);
-            requireParent(file.getBucketId(), params.getToDirId());
-            this.putFileBack(file, params.getToDirId());
-
-            // loop children put back
-            List<StoreFile> child = baseMapper.queryChildren(id);
-            loopPutBack(child, file.getId());
-
-            this.syncDirSize(params.getToDirId());
+        List<StoreFile> files = getRestoreRoots(params.getFileIds());
+        files.forEach(file -> requireParent(file.getBucketId(), params.getToDirId()));
+        for (StoreFile file : files) {
+            restoreTree(file, params.getToDirId());
         }
+    }
+
+    private void restoreTree(StoreFile file, Integer toDirId) {
+        putFileBack(file, toDirId);
+        loopPutBack(baseMapper.queryChildren(file.getId()), file.getId());
+        syncDirSize(toDirId);
+    }
+
+    private List<StoreFile> getRestoreRoots(List<Integer> ids) {
+        if (ids == null || ids.isEmpty()) {
+            throw new BuzzException("未选择文件");
+        }
+        Map<Integer, StoreFile> selected = new LinkedHashMap<>();
+        for (Integer id : ids) {
+            Integer fileId = parseFileId(id);
+            selected.put(fileId, requireTrash(fileId));
+        }
+        Set<Integer> selectedIds = new LinkedHashSet<>(selected.keySet());
+        return selected.values().stream()
+                .filter(file -> !hasSelectedAncestor(file, selectedIds, selected))
+                .collect(Collectors.toList());
+    }
+
+    private boolean removeBatchSafely(Collection<?> ids) {
+        if (ids == null || ids.isEmpty()) return true;
+        Map<Integer, StoreFile> selected = new LinkedHashMap<>();
+        for (Object id : ids) {
+            Integer fileId = parseFileId((Serializable) id);
+            selected.put(fileId, requireAccessible(fileId));
+        }
+        Set<Integer> selectedIds = new LinkedHashSet<>(selected.keySet());
+        selected.values().stream()
+                .filter(file -> !hasSelectedAncestor(file, selectedIds, selected))
+                .map(StoreFile::getId)
+                .forEach(this::removeById);
+        return true;
+    }
+
+    private boolean hasSelectedAncestor(StoreFile file, Set<Integer> selectedIds, Map<Integer, StoreFile> selected) {
+        Integer parentId = file.getParentId();
+        while (parentId != null && parentId > 0) {
+            if (selectedIds.contains(parentId)) return true;
+            StoreFile parent = selected.get(parentId);
+            if (parent == null) return false;
+            parentId = parent.getParentId();
+        }
+        return false;
     }
 
     public void putFileBack(StoreFile file, Integer toDirId) {
