@@ -1,5 +1,6 @@
 package com.faber.api.disk.store.biz;
 
+import cn.hutool.core.util.StrUtil;
 import com.faber.api.base.admin.biz.UserBiz;
 import com.faber.api.disk.store.entity.StoreBucket;
 import com.faber.api.disk.store.entity.StoreBucketUser;
@@ -12,13 +13,18 @@ import com.faber.core.exception.auth.UserNoPermissionException;
 import com.faber.core.vo.query.QueryParams;
 import com.faber.core.web.biz.BaseBiz;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.annotation.Resource;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -45,7 +51,7 @@ public class StoreBucketUserBiz extends BaseBiz<StoreBucketUserMapper,StoreBucke
                     .map(StoreBucket::getId)
                     .collect(Collectors.toList());
         } else {
-            ids = lambdaQuery()
+            List<Integer> linkedIds = lambdaQuery()
                     .eq(StoreBucketUser::getUserId, getCurrentUserId())
                     .select(StoreBucketUser::getBucketId)
                     .list()
@@ -53,6 +59,13 @@ public class StoreBucketUserBiz extends BaseBiz<StoreBucketUserMapper,StoreBucke
                     .map(StoreBucketUser::getBucketId)
                     .distinct()
                     .collect(Collectors.toList());
+            ids = linkedIds.isEmpty()
+                    ? Collections.emptyList()
+                    : storeBucketMapper.selectList(new QueryWrapper<StoreBucket>()
+                                    .in("id", linkedIds))
+                            .stream()
+                            .map(StoreBucket::getId)
+                            .collect(Collectors.toList());
         }
         return ids.isEmpty() ? Collections.singletonList(0) : ids;
     }
@@ -139,21 +152,30 @@ public class StoreBucketUserBiz extends BaseBiz<StoreBucketUserMapper,StoreBucke
 
     @Override
     public boolean save(StoreBucketUser entity) {
-        if (entity == null || entity.getBucketId() == null || entity.getUserId() == null) {
+        if (entity == null || entity.getBucketId() == null || StrUtil.isBlank(entity.getUserId())) {
             throw new BuzzException("文件库成员参数不能为空");
         }
+        requireUser(entity.getUserId());
 
         // 文件库创建时由 StoreBucketBiz 写入创建者关联。
         if (StoreBucketUserTypeEnum.CREATOR.equals(entity.getType())
                 && Objects.equals(entity.getUserId(), getCurrentUserId())) {
             StoreBucket bucket = storeBucketMapper.selectById(entity.getBucketId());
             if (bucket != null && Objects.equals(bucket.getCrtUser(), getCurrentUserId())) {
+                if (hasActiveLink(entity.getBucketId(), entity.getUserId())) {
+                    throw new BuzzException("文件库创建者关联已存在");
+                }
+                entity.setDeleted(false);
                 return super.save(entity);
             }
         }
 
         requireManage(entity.getBucketId());
+        if (hasActiveLink(entity.getBucketId(), entity.getUserId())) {
+            throw new BuzzException("用户已是文件库成员");
+        }
         entity.setType(StoreBucketUserTypeEnum.USER);
+        entity.setDeleted(false);
         return super.save(entity);
     }
 
@@ -163,6 +185,9 @@ public class StoreBucketUserBiz extends BaseBiz<StoreBucketUserMapper,StoreBucke
         if (current == null) {
             throw new BuzzException("文件库成员不存在");
         }
+        if (StoreBucketUserTypeEnum.CREATOR.equals(current.getType())) {
+            throw new BuzzException("不能修改文件库创建者");
+        }
         requireManage(current.getBucketId());
         if (entity.getBucketId() != null && !Objects.equals(entity.getBucketId(), current.getBucketId())) {
             throw new BuzzException("文件库成员不能跨库修改");
@@ -170,6 +195,7 @@ public class StoreBucketUserBiz extends BaseBiz<StoreBucketUserMapper,StoreBucke
         entity.setBucketId(current.getBucketId());
         entity.setUserId(current.getUserId());
         entity.setType(current.getType());
+        entity.setDeleted(false);
         return super.updateById(entity);
     }
 
@@ -178,30 +204,46 @@ public class StoreBucketUserBiz extends BaseBiz<StoreBucketUserMapper,StoreBucke
         i.setUser(userBiz.getByIdWithCache(i.getUserId()));
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void updateBucketUser(List<StoreBucketUser> list) {
         if (list == null || list.isEmpty()) return;
+
+        Map<Integer, Set<String>> desiredUsers = new HashMap<>();
         for (StoreBucketUser link : list) {
             requireManage(link.getBucketId());
-            if (link.getUserId() == null) {
+            if (StrUtil.isBlank(link.getUserId())) {
                 throw new BuzzException("用户ID不能为空");
             }
-            long count = lambdaQuery()
-                    .eq(StoreBucketUser::getBucketId, link.getBucketId())
-                    .eq(StoreBucketUser::getUserId, link.getUserId())
-                    .count();
-            if (count == 1) continue;
+            requireUser(link.getUserId());
+            desiredUsers.computeIfAbsent(link.getBucketId(), ignored -> new HashSet<>())
+                    .add(link.getUserId());
+        }
 
-            if (count > 0) {
-                lambdaUpdate()
-                        .eq(StoreBucketUser::getBucketId, link.getBucketId())
-                        .eq(StoreBucketUser::getUserId, link.getUserId())
-                        .remove();
+        desiredUsers.forEach((bucketId, userIds) -> {
+            List<StoreBucketUser> currentLinks = lambdaQuery()
+                    .eq(StoreBucketUser::getBucketId, bucketId)
+                    .list();
+            Set<String> retainedUserIds = new HashSet<>();
+            for (StoreBucketUser current : currentLinks) {
+                if (StoreBucketUserTypeEnum.CREATOR.equals(current.getType())) {
+                    continue;
+                }
+                if (!userIds.contains(current.getUserId()) || !retainedUserIds.add(current.getUserId())) {
+                    super.removeById(current.getId());
+                }
             }
 
-            link.setId(null);
-            link.setType(StoreBucketUserTypeEnum.USER);
-            super.save(link);
-        }
+            for (String userId : userIds) {
+                if (currentLinks.stream().noneMatch(link -> Objects.equals(link.getUserId(), userId))) {
+                    StoreBucketUser link = new StoreBucketUser();
+                    link.setBucketId(bucketId);
+                    link.setUserId(userId);
+                    link.setType(StoreBucketUserTypeEnum.USER);
+                    link.setDeleted(false);
+                    super.save(link);
+                }
+            }
+        });
     }
 
     @Override
@@ -209,6 +251,7 @@ public class StoreBucketUserBiz extends BaseBiz<StoreBucketUserMapper,StoreBucke
         StoreBucketUser link = super.getById(id);
         if (link == null) return false;
         requireManage(link.getBucketId());
+        requireRemovable(link);
         return super.removeById(id);
     }
 
@@ -230,14 +273,24 @@ public class StoreBucketUserBiz extends BaseBiz<StoreBucketUserMapper,StoreBucke
         StoreBucketUser link = baseMapper.selectByIdIgnoreLogic(id);
         if (link == null) return;
         requireManage(link.getBucketId());
+        requireRemovable(link);
         super.removePerById(id);
     }
 
     @Override
     public void removeByQuery(QueryParams query) {
         List<StoreBucketUser> links = list(query);
-        links.forEach(link -> requireManage(link.getBucketId()));
+        links.forEach(link -> {
+            requireManage(link.getBucketId());
+            requireRemovable(link);
+        });
         super.removeByQuery(query);
+    }
+
+    @Override
+    public void removeMine() {
+        lambdaQuery().eq(StoreBucketUser::getCrtUser, getCurrentUserId()).list()
+                .forEach(link -> removeById(link.getId()));
     }
 
     @Override
@@ -256,6 +309,9 @@ public class StoreBucketUserBiz extends BaseBiz<StoreBucketUserMapper,StoreBucke
 
     @Override
     public boolean saveOrUpdate(StoreBucketUser entity) {
+        if (entity == null) {
+            throw new BuzzException("文件库成员参数不能为空");
+        }
         return entity.getId() == null ? save(entity) : updateById(entity);
     }
 
@@ -264,6 +320,25 @@ public class StoreBucketUserBiz extends BaseBiz<StoreBucketUserMapper,StoreBucke
         if (entityList == null) return true;
         entityList.forEach(this::saveOrUpdate);
         return true;
+    }
+
+    private boolean hasActiveLink(Integer bucketId, String userId) {
+        return lambdaQuery()
+                .eq(StoreBucketUser::getBucketId, bucketId)
+                .eq(StoreBucketUser::getUserId, userId)
+                .count() > 0;
+    }
+
+    private void requireUser(String userId) {
+        if (userBiz.getByIdWithCache(userId) == null) {
+            throw new BuzzException("用户不存在");
+        }
+    }
+
+    private void requireRemovable(StoreBucketUser link) {
+        if (StoreBucketUserTypeEnum.CREATOR.equals(link.getType())) {
+            throw new BuzzException("不能移除文件库创建者");
+        }
     }
 
 }

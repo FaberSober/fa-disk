@@ -24,4 +24,6 @@ public interface StoreFileMapper extends FaBaseMapper<StoreFile> {
 
     Long sumFileSizeByBucketId(@Param("bucketId") Integer bucketId);
 
+    long countByBucketId(@Param("bucketId") Integer bucketId);
+
 }

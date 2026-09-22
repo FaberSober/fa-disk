@@ -91,4 +91,8 @@
         select IFNULL(SUM(size),0) size from disk_store_file where deleted = false AND dir = false and bucket_id = #{bucketId}
     </select>
 
+    <select id="countByBucketId" parameterType="map" resultType="long">
+        select COUNT(1) from disk_store_file where bucket_id = #{bucketId}
+    </select>
+
 </mapper>

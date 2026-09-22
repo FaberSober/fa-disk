@@ -1,6 +1,7 @@
 package com.faber.api.disk.store.biz;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import cn.hutool.core.util.StrUtil;
 import com.faber.api.disk.store.entity.StoreBucket;
 import com.faber.api.disk.store.entity.StoreBucketUser;
 import com.faber.api.disk.store.entity.StoreFile;
@@ -38,14 +39,21 @@ public class StoreBucketBiz extends BaseBiz<StoreBucketMapper, StoreBucket> {
 
     @Override
     public boolean save(StoreBucket entity) {
-        super.save(entity);
+        if (entity == null || StrUtil.isBlank(entity.getName())) {
+            throw new BuzzException("文件库名称不能为空");
+        }
+        if (!super.save(entity)) {
+            return false;
+        }
 
         // 添加创建者绑定关系
         StoreBucketUser link = new StoreBucketUser();
         link.setBucketId(entity.getId());
         link.setUserId(getCurrentUserId());
         link.setType(StoreBucketUserTypeEnum.CREATOR);
-        storeBucketUserBiz.save(link);
+        if (!storeBucketUserBiz.save(link)) {
+            throw new BuzzException("文件库创建者关联保存失败");
+        }
 
         return true;
     }
@@ -109,12 +117,18 @@ public class StoreBucketBiz extends BaseBiz<StoreBucketMapper, StoreBucket> {
         if (entity == null || entity.getId() == null) {
             throw new BuzzException("文件库ID不能为空");
         }
+        if (entity.getName() != null && StrUtil.isBlank(entity.getName())) {
+            throw new BuzzException("文件库名称不能为空");
+        }
         requireManage(entity.getId());
         return super.updateById(entity);
     }
 
     @Override
     public boolean saveOrUpdate(StoreBucket entity) {
+        if (entity == null) {
+            throw new BuzzException("文件库参数不能为空");
+        }
         return entity.getId() == null ? save(entity) : updateById(entity);
     }
 
@@ -141,8 +155,14 @@ public class StoreBucketBiz extends BaseBiz<StoreBucketMapper, StoreBucket> {
 
     @Override
     public boolean removeById(Serializable id) {
-        requireManage(Integer.valueOf(id.toString()));
-        return super.removeById(id);
+        Integer bucketId = requireBucketId(id);
+        requireManage(bucketId);
+        requireEmpty(bucketId);
+        boolean removed = super.removeById(id);
+        if (removed) {
+            clearBucketUsers(bucketId);
+        }
+        return removed;
     }
 
     @Override
@@ -160,14 +180,51 @@ public class StoreBucketBiz extends BaseBiz<StoreBucketMapper, StoreBucket> {
 
     @Override
     public void removePerById(Serializable id) {
-        requireManage(Integer.valueOf(id.toString()));
+        Integer bucketId = requireBucketId(id);
+        requireManage(bucketId);
+        requireEmpty(bucketId);
         super.removePerById(id);
+        clearBucketUsers(bucketId);
     }
 
     @Override
     public void removeByQuery(QueryParams query) {
-        list(query).forEach(bucket -> requireManage(bucket.getId()));
+        List<Integer> bucketIds = list(query).stream().map(StoreBucket::getId).toList();
+        bucketIds.forEach(bucketId -> {
+            requireManage(bucketId);
+            requireEmpty(bucketId);
+        });
         super.removeByQuery(query);
+        bucketIds.forEach(this::clearBucketUsers);
+    }
+
+    @Override
+    public void removeMine() {
+        lambdaQuery().eq(StoreBucket::getCrtUser, getCurrentUserId()).list()
+                .forEach(bucket -> removeById(bucket.getId()));
+    }
+
+    private Integer requireBucketId(Serializable id) {
+        if (id == null) {
+            throw new BuzzException("文件库ID不能为空");
+        }
+        try {
+            return Integer.valueOf(id.toString());
+        } catch (NumberFormatException e) {
+            throw new BuzzException("文件库ID格式错误");
+        }
+    }
+
+    private void requireEmpty(Integer bucketId) {
+        if (storeFileBiz.getBaseMapper().countByBucketId(bucketId) > 0) {
+            throw new BuzzException("文件库存在文件，请先清空文件后再删除");
+        }
+    }
+
+    private void clearBucketUsers(Integer bucketId) {
+        storeBucketUserBiz.lambdaUpdate()
+                .eq(StoreBucketUser::getBucketId, bucketId)
+                .remove();
     }
 
     public void syncBucketSize() {
