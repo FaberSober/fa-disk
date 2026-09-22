@@ -151,6 +151,61 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         }
     }
 
+    private List<StoreFile> getActiveRoots(List<Integer> ids) {
+        if (ids == null || ids.isEmpty()) {
+            throw new BuzzException("未选择文件");
+        }
+        Map<Integer, StoreFile> selected = new LinkedHashMap<>();
+        for (Integer id : ids) {
+            selected.put(id, requireAccessible(id));
+        }
+        Set<Integer> selectedIds = new LinkedHashSet<>(selected.keySet());
+        return selected.values().stream()
+                .filter(file -> !hasSelectedAncestor(file, selectedIds, selected))
+                .collect(Collectors.toList());
+    }
+
+    private void requireOperationTarget(List<StoreFile> files, Integer toDirId) {
+        if (toDirId == null) {
+            throw new BuzzException("目标文件夹不能为空");
+        }
+        Integer bucketId = files.get(0).getBucketId();
+        for (StoreFile file : files) {
+            if (!Objects.equals(bucketId, file.getBucketId())) {
+                throw new BuzzException("不能跨库操作文件");
+            }
+        }
+        requireParent(bucketId, toDirId);
+        if (toDirId == 0) return;
+
+        Set<Integer> sourceDirIds = files.stream()
+                .filter(StoreFile::getDir)
+                .map(StoreFile::getId)
+                .collect(Collectors.toSet());
+        StoreFile target = requireAccessible(toDirId);
+        while (target != null && target.getId() > 0) {
+            if (sourceDirIds.contains(target.getId())) {
+                throw new BuzzException("目录不能移动或复制到自身及子目录");
+            }
+            Integer parentId = target.getParentId();
+            target = parentId == null || parentId == 0 ? null : requireAccessible(parentId);
+        }
+    }
+
+    private void requireNameAvailable(StoreFile file, Integer parentId, Integer ignoredId) {
+        var query = lambdaQuery()
+                .eq(StoreFile::getBucketId, file.getBucketId())
+                .eq(StoreFile::getDir, file.getDir())
+                .eq(StoreFile::getParentId, parentId)
+                .eq(StoreFile::getName, file.getName());
+        if (ignoredId != null) {
+            query.ne(StoreFile::getId, ignoredId);
+        }
+        if (query.count() > 0) {
+            throw new BuzzException("目标文件夹存在同名文件或目录");
+        }
+    }
+
     private void prepareQuery(BasePageQuery<StoreFileQueryVo> query, boolean deleted) {
         if (query == null || query.getQuery() == null) {
             throw new BuzzException("文件查询参数不能为空");
@@ -279,6 +334,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
 
 //    @CacheInvalidate(name = "store:file:fullpath:", key = "#entity.id")
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public boolean updateById(StoreFile entity) {
         StoreFile current = requireAccessible(entity == null ? null : entity.getId());
         if (entity.getBucketId() == null) entity.setBucketId(current.getBucketId());
@@ -288,18 +344,22 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         if (entity.getParentId() == null) entity.setParentId(current.getParentId());
         if (entity.getDir() == null) entity.setDir(current.getDir());
         if (entity.getName() == null) entity.setName(current.getName());
-        requireParent(entity.getBucketId(), entity.getParentId());
+        boolean parentChanged = !Objects.equals(entity.getParentId(), current.getParentId());
+        if (parentChanged) {
+            requireOperationTarget(List.of(current), entity.getParentId());
+            syncFullPath(entity);
+        } else {
+            requireParent(entity.getBucketId(), entity.getParentId());
+        }
+        requireNameAvailable(entity, entity.getParentId(), entity.getId());
 
-        long count = lambdaQuery()
-                .eq(StoreFile::getBucketId, entity.getBucketId())
-                .eq(StoreFile::getDir, entity.getDir())
-                .eq(StoreFile::getParentId, entity.getParentId())
-                .eq(StoreFile::getName, entity.getName())
-                .ne(StoreFile::getId, entity.getId())
-                .count();
-        if (count > 0) throw new BuzzException("已经存在同名文件");
-
-        return super.updateById(entity);
+        boolean updated = super.updateById(entity);
+        if (parentChanged) {
+            syncDir(entity.getId());
+            syncDirSize(current.getParentId());
+            syncDirSize(entity.getParentId());
+        }
+        return updated;
     }
 
     public void updateInfo(StoreFile entity) {
@@ -458,60 +518,55 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         }
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void moveToDir(StoreFilesMoveTo params) {
-        if (params == null || params.getToDirId() == null) {
-            throw new BuzzException("目标文件夹不能为空");
+        if (params == null) {
+            throw new BuzzException("移动参数不能为空");
         }
-        Integer bucketId = null;
-        for (Integer fileId : params.getFileIds()) {
-            StoreFile storeFile = requireAccessible(fileId);
-            if (bucketId == null) bucketId = storeFile.getBucketId();
-            if (!Objects.equals(bucketId, storeFile.getBucketId())) {
-                throw new BuzzException("不能跨库操作文件");
-            }
+        List<StoreFile> files = getActiveRoots(params.getFileIds());
+        requireOperationTarget(files, params.getToDirId());
+        Set<Integer> oldParentIds = files.stream()
+                .map(StoreFile::getParentId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        for (StoreFile file : files) {
+            file.setParentId(params.getToDirId());
+            updateById(file);
         }
-        requireParent(bucketId, params.getToDirId());
-        for (Integer fileId : params.getFileIds()) {
-            StoreFile storeFile = requireAccessible(fileId);
-            storeFile.setParentId(params.getToDirId());
-            this.updateById(storeFile);
-        }
-
-        this.syncDir(params.getToDirId());
+        syncDir(params.getToDirId());
+        syncDirSize(params.getToDirId());
+        oldParentIds.stream()
+                .filter(parentId -> parentId > 0 && !Objects.equals(parentId, params.getToDirId()))
+                .forEach(this::syncDirSize);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public void copyToDir(StoreFilesMoveTo params) {
-        if (params == null || params.getToDirId() == null) {
-            throw new BuzzException("目标文件夹不能为空");
+        if (params == null) {
+            throw new BuzzException("复制参数不能为空");
         }
-        Integer bucketId = null;
-        for (Integer fileId : params.getFileIds()) {
-            StoreFile storeFile = requireAccessible(fileId);
-            if (bucketId == null) bucketId = storeFile.getBucketId();
-            if (!Objects.equals(bucketId, storeFile.getBucketId())) {
-                throw new BuzzException("不能跨库操作文件");
+        List<StoreFile> files = getActiveRoots(params.getFileIds());
+        requireOperationTarget(files, params.getToDirId());
+        for (StoreFile file : files) {
+            copyTree(file, params.getToDirId());
+        }
+        syncDir(params.getToDirId());
+        syncDirSize(params.getToDirId());
+    }
+
+    private void copyTree(StoreFile source, Integer toDirId) {
+        Integer sourceId = source.getId();
+        requireNameAvailable(source, toDirId, null);
+        source.setParentId(toDirId);
+        source.setId(null);
+        save(source);
+
+        if (source.getDir()) {
+            List<StoreFile> children = lambdaQuery().eq(StoreFile::getParentId, sourceId).list();
+            for (StoreFile child : children) {
+                copyTree(child, source.getId());
             }
         }
-        requireParent(bucketId, params.getToDirId());
-        for (Integer fileId : params.getFileIds()) {
-            StoreFile storeFile = requireAccessible(fileId);
-            Integer oldId = storeFile.getId();
-
-            storeFile.setParentId(params.getToDirId());
-            storeFile.setId(null);
-            this.save(storeFile);
-
-            // loop child files move to new copied dir
-            if (storeFile.getDir()) {
-                List<StoreFile> childItems = lambdaQuery().eq(StoreFile::getParentId, oldId).list();
-                List<Integer> fileIds = childItems.stream().map(i -> i.getId()).collect(Collectors.toList());
-
-                StoreFilesMoveTo moveChild = new StoreFilesMoveTo(fileIds, storeFile.getId());
-                this.copyToDir(moveChild);
-            }
-        }
-
-        this.syncDir(params.getToDirId());
     }
 
     public void syncFileTags(Integer fileId) {
