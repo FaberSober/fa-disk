@@ -28,7 +28,9 @@
     </resultMap>
 
     <select id="queryFile" parameterType="com.faber.api.disk.store.vo.req.StoreFileQueryVo" resultMap="storeFileMap">
-        SELECT t.*
+        SELECT t.id, t.bucket_id, t.name, t.parent_id, t.sort, t.dir, t.size, t.type,
+               t.file_id, t.full_path, t.tags, t.delete_action, t.crt_time, t.crt_user,
+               t.crt_name, t.crt_host, t.upd_time, t.upd_user, t.upd_name, t.upd_host, t.deleted
          FROM disk_store_file t
         WHERE t.deleted = #{query.deleted}
         <if test="query.accessibleBucketIds != null and query.accessibleBucketIds.size != 0">

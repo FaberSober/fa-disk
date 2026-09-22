@@ -213,6 +213,9 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         StoreFileQueryVo fileQuery = query.getQuery();
         fileQuery.setDeleted(deleted);
         fileQuery.setAccessibleBucketIds(storeBucketUserBiz.getAccessibleBucketIds());
+        if (query.getSorter() == null || query.getSorter().isBlank()) {
+            query.setSorter("dir DESC, sort ASC, name ASC, id ASC");
+        }
         if (fileQuery.getBucketId() != null) {
             storeBucketUserBiz.requireAccessible(fileQuery.getBucketId());
         }
@@ -658,6 +661,7 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
 
     public TableRet<StoreFile> queryTrashFilePage(BasePageQuery<StoreFileQueryVo> query) {
         prepareQuery(query, true);
+        query.getQuery().setDeleteAction(true);
         PageInfo<StoreFile> info = PageHelper.startPage(query.getCurrent(), query.getPageSize())
                 .doSelectPageInfo(() -> baseMapper.queryFile(query.getQuery(), query.getSorter()));
         return new TableRet<>(info);
