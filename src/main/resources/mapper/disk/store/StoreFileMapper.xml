@@ -64,13 +64,27 @@
             <if test="query.tagQueryType == 1">
                 AND
                 <foreach item="tagId" collection="query.tagIds" open="(" separator=" AND " close=")" index="">
-                    JSON_CONTAINS(t.tags, JSON_OBJECT('tagId', #{tagId}))
+                    <choose>
+                        <when test="_databaseId == 'postgre'">
+                            t.tags @&gt; jsonb_build_array(jsonb_build_object('tagId', #{tagId}))
+                        </when>
+                        <otherwise>
+                            JSON_CONTAINS(t.tags, JSON_OBJECT('tagId', #{tagId}))
+                        </otherwise>
+                    </choose>
                 </foreach>
             </if>
             <if test="query.tagQueryType == 2">
                 AND
                 <foreach item="tagId" collection="query.tagIds" open="(" separator=" OR " close=")" index="">
-                    JSON_CONTAINS(t.tags, JSON_OBJECT('tagId', #{tagId}))
+                    <choose>
+                        <when test="_databaseId == 'postgre'">
+                            t.tags @&gt; jsonb_build_array(jsonb_build_object('tagId', #{tagId}))
+                        </when>
+                        <otherwise>
+                            JSON_CONTAINS(t.tags, JSON_OBJECT('tagId', #{tagId}))
+                        </otherwise>
+                    </choose>
                 </foreach>
             </if>
         </if>
