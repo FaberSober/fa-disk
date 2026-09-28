@@ -2,6 +2,7 @@ package com.faber.api.disk.doc.biz;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.extra.spring.SpringUtil;
+import cn.hutool.json.JSONObject;
 import com.faber.api.base.admin.biz.FileSaveBiz;
 import com.faber.api.base.admin.biz.UserBiz;
 import com.faber.api.base.admin.entity.FileSave;
@@ -21,6 +22,8 @@ import com.faber.api.disk.store.biz.StoreFileHisBiz;
 import com.faber.api.disk.store.entity.StoreFile;
 import com.faber.api.disk.store.entity.StoreFileHis;
 import com.faber.core.constant.FaSetting;
+import com.faber.core.context.TenantContext;
+import com.faber.core.exception.BuzzException;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
@@ -29,6 +32,7 @@ import org.springframework.stereotype.Service;
 import jakarta.annotation.Resource;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * @author Farando
@@ -76,7 +80,10 @@ public class DiskOnlyofficeBiz {
      * @return
      */
     public FileModel openFileModal(Integer storeFileId, Mode mode) {
-        StoreFile storeFile = storeFileBiz.getById(storeFileId);
+        StoreFile storeFile = storeFileBiz.requireAccessible(storeFileId);
+        if (Boolean.TRUE.equals(storeFile.getDir())) {
+            throw new BuzzException("目录不能使用在线文档打开");
+        }
         String fileId = storeFile.getFileId();
 
         FileSave fileSave = fileSaveBiz.getById(fileId);
@@ -95,7 +102,9 @@ public class DiskOnlyofficeBiz {
         document.setKey(storeFileId + "_" + fileId); // 设置文件ID
 
         // onlyoffice下载文件的URL，onlyoffice服务器需要能访问到该URL
-        document.setUrl(faSetting.getOnlyoffice().getCallbackServer() + "api/base/admin/fileSave/getFile/" + fileId);
+        String previewUrl = storeFileBiz.createAccessResource(storeFileId).getPreviewUrl();
+        document.setUrl(StrUtil.appendIfMissing(faSetting.getOnlyoffice().getCallbackServer(), "/")
+                + StrUtil.removePrefix(previewUrl, "/"));
 
         EditorConfig editorConfig = fileModel.getEditorConfig();
         editorConfig.setLang("zh");
@@ -115,20 +124,51 @@ public class DiskOnlyofficeBiz {
     }
 
     public void track(final Track track) {
-        // 设置操作用户
-        setTrackUserToContext(track);
+        if (track == null || StrUtil.isBlank(track.getKey())) {
+            throw new BuzzException("OnlyOffice 回调文件无效");
+        }
+        JSONObject token = jwtManager.readVerifiedToken();
+        String tokenKey = token.getStr("key");
+        JSONObject payload = token.getJSONObject("payload");
+        if (StrUtil.isBlank(tokenKey) && payload != null) {
+            tokenKey = payload.getStr("key");
+        }
+        if (!Objects.equals(track.getKey(), tokenKey)) {
+            throw new BuzzException("OnlyOffice 回调文件不匹配");
+        }
 
-        switch (track.getStatus()) {
-            case EDITING:
-                break;
-            case SAVE:
-            case MUST_FORCE_SAVE:
-                this.saveTrack(track);
-                break;
-            case CORRUPTED:
-                break;
-            case CORRUPTED_FORCE_SAVE:
-                break;
+        Integer storeFileId;
+        try {
+            storeFileId = Integer.valueOf(track.getKey().split("_")[0]);
+        } catch (Exception e) {
+            throw new BuzzException("OnlyOffice 回调文件ID无效");
+        }
+        String previousTenantId = TenantContext.getTenantId();
+        if (faSetting.isTenantEnabled()) {
+            String tenantId = storeFileBiz.getTenantIdForOnlyoffice(storeFileId);
+            if (StrUtil.isBlank(tenantId)) {
+                throw new BuzzException("网盘文件不存在或未归属租户");
+            }
+            TenantContext.setTenantId(tenantId);
+        }
+        try {
+            // 设置操作用户
+            setTrackUserToContext(track);
+
+            switch (track.getStatus()) {
+                case EDITING:
+                    break;
+                case SAVE:
+                case MUST_FORCE_SAVE:
+                    this.saveTrack(track);
+                    break;
+                case CORRUPTED:
+                    break;
+                case CORRUPTED_FORCE_SAVE:
+                    break;
+            }
+        } finally {
+            TenantContext.setTenantId(previousTenantId);
         }
     }
 

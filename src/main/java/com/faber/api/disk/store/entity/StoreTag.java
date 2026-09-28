@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.faber.core.annotation.*;
-import com.faber.core.bean.BaseDelEntity;
+import com.faber.core.bean.BaseTnDelEntity;
 import lombok.Data;
 
 import jakarta.validation.constraints.NotNull;
@@ -21,7 +21,7 @@ import jakarta.validation.constraints.NotNull;
 @FaModalName(name = "STORE-标签")
 @TableName("disk_store_tag")
 @Data
-public class StoreTag extends BaseDelEntity {
+public class StoreTag extends BaseTnDelEntity {
 
 
     @SqlTreeId

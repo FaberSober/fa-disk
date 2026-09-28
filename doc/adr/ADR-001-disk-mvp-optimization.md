@@ -10,7 +10,7 @@
 | 编号 | 模块 | 功能 | 功能详情 | 当前规划 | 进度 |
 | --- | --- | --- | --- | --- | --- |
 | D01 | 领域契约 | 统一 API、权限和状态模型 | 固定桶/用户边界、文件状态、路径与响应约定 | 执行开发（MVP） | ✅已完成 |
-| D01-1 | 租户隔离 | 网盘数据与租户上下文绑定 | 按当前租户隔离桶、目录、标签、历史和关联关系，兼容超级管理员与历史数据 | 方案分析（待确认） | 👀待确认 |
+| D01-1 | 租户隔离 | 网盘数据与租户上下文绑定 | 隔离网盘业务记录，并通过已授权网盘记录控制文件访问；兼容超级管理员与历史数据 | 执行开发（MVP） | ✅已完成 |
 | D02 | 桶管理 | 桶生命周期与成员授权 | 新增、编辑、删除、授权均校验当前用户范围 | 执行开发（MVP） | ✅已完成 |
 | D03 | 文件生命周期 | 目录/文件删除与恢复 | 活跃列表、回收站、批量删除和恢复保持一致 | 执行开发（MVP） | ✅已完成 |
 | D04 | 目录操作 | 移动、复制和树约束 | 禁止跨桶、移动到自身/子孙节点，维护父子关系 | 执行开发（MVP） | ✅已完成 |
@@ -42,15 +42,16 @@
 - 明确“正常、回收站、已恢复”的状态转换；沿用现有逻辑删除能力，避免另造一套并行状态。
 - 参考：`frontend/apps/admin/features/fa-disk-pages/configs/index.ts:8`、`fa-disk/src/main/java/com/faber/api/disk/store/rest/StoreFileController.java:31`、`fa-core/src/main/java/com/faber/core/bean/BaseDelEntity.java:21`。
 
-### D01-1：网盘租户隔离（方案分析）
+### D01-1：网盘租户隔离（已实现，验证通过）
 
-- 当前 `StoreBucket`、`StoreBucketUser`、`StoreFile`、`StoreTag`、`StoreFileTag`、`StoreFileHis` 均继承 `BaseDelEntity`，对应 `disk_store_*` 表没有 `tenant_id`；现有 `StoreBucketUserBiz` 主要按当前用户和文件库成员关系判断可见范围，不能单独形成租户边界。
+- `StoreBucket`、`StoreBucketUser`、`StoreFile`、`StoreTag`、`StoreFileTag`、`StoreFileHis` 已改继承 `BaseTnDelEntity`，读写复用现有租户拦截与可信租户字段填充；桶成员校验仍同时控制用户可访问范围。
 - 优先复用现有租户基础设施：`TenantContextResolver` 从 `FA-TN-TENANT-ID` 解析租户并通过 `tn_tenant_user` 校验，`BaseTnDelEntity` 提供租户字段和插入填充，`FaTenantInterceptor` 对租户实体对应表追加 `tenant_id` 条件，`MysqlMetaObjectHandler` 覆盖客户端提交的租户字段。
-- 实现范围应覆盖上述六张网盘业务表：实体改继承 `BaseTnDelEntity`；MySQL/PostgreSQL 分别增加 `tenant_id`、回填历史数据到默认租户并补充租户维度索引；批量写入、逻辑/物理删除和自定义 Mapper SQL 均必须验证租户条件不会被绕过。
+- MySQL/PostgreSQL v1.0.6 升级脚本为六张表增加 `tenant_id` 与租户维度索引；历史文件库按创建者默认租户归属，无关联时回退到排序最前的有效租户，成员/文件/标签/历史关系跟随所属文件库或文件。
 - `StoreBucketUserBiz` 的可访问文件库、`StoreFileBiz` 的目录/文件操作、标签/文件标签/历史关联校验，都要同时满足“当前租户 + 当前用户/文件库成员”条件；禁止跨租户移动、复制、打标签、恢复和历史查询。租户上下文为空时普通用户拒绝访问；超级管理员无租户上下文时保留跨租户运维能力。
-- `FileSave` 仍继承 `BaseDelEntity`，`base_file_save` 是被多个模块复用的共享基础表。实现前必须确认其边界：优先评估将文件存储记录也纳入租户模型；若暂不改造，则网盘只能通过已授权的 `StoreFile` 间接使用 `fileId`，不能把裸 `fileId` 或通用文件接口当作租户权限边界。
-- 迁移应采用“增加可空字段 → 按默认租户回填 → 校验数据 → 再收紧约束/补索引”的顺序，并同时提供 MySQL 5.7 与 PostgreSQL 18 脚本；需要覆盖已有桶、目录、标签、历史和关联数据，不能只修改空库基线。
-- 验收至少包括：两个租户之间读取、创建、更新、删除、移动、复制、标签、历史、上传和下载均不可越界；同一用户切换租户请求头后只能看到当前租户数据；超级管理员行为符合约定；历史数据迁移后仍可访问；两种数据库查询结果一致。
+- `FileSave` 与 `base_file_save` 暂维持通用共享存储目录，不纳入本次网盘租户隔离；物理文件可被多个业务模块引用。
+- 网盘下载、预览及 OnlyOffice 打开先按 `StoreFile.id` 校验租户和桶/成员权限，再通过短时资源会话读取共享 `fileId`；OnlyOffice 回调验证 JWT 并恢复文件所属租户上下文。网盘前端不再调用裸 `fileId` 通用下载/预览接口。
+- 若升级时尚无有效租户，历史记录的 `tenant_id` 会暂留空值；创建首个租户后，必须先确认六张表不存在未归属记录，再开放普通租户访问。
+- 人工验收已通过：双租户数据隔离、租户切换、历史数据归属、网盘授权预览/下载及 OnlyOffice 回调行为符合预期。
 - 参考：`fa-disk/src/main/java/com/faber/api/disk/store/entity/StoreBucket.java:22`、`fa-disk/src/main/java/com/faber/api/disk/store/entity/StoreFile.java:30`、`fa-disk/src/main/java/com/faber/api/disk/store/biz/StoreBucketUserBiz.java:46`、`fa-core/src/main/java/com/faber/core/bean/BaseTnDelEntity.java:19`、`fa-core/src/main/java/com/faber/core/config/mybatis/interceptor/FaTenantInterceptor.java:25`、`fa-base/src/main/java/com/faber/config/auth/TenantContextResolver.java:25`、`fa-base/src/main/java/com/faber/api/base/admin/entity/FileSave.java:24`。
 
 ### D02：桶生命周期与成员授权
@@ -138,7 +139,7 @@
 
 | 优先级 | 功能 | 预期收益 | 改动范围 | 主要风险 |
 | --- | --- | --- | --- | --- |
-| P0 | D01-D04、D01-1 | 先消除租户越权、错删、跨桶和目录循环等正确性风险 | 后端租户字段、权限、生命周期、树操作及少量接口契约 | 既有接口调用方依赖旧参数或旧状态语义；历史数据回填和共享文件表边界不清 |
+| P0 | D01-D04、D01-1 | 先消除租户越权、错删、跨桶和目录循环等正确性风险 | 后端租户字段、权限、生命周期、树操作及少量接口契约 | 既有接口调用方依赖旧参数或旧状态语义；历史数据回填及存储直链绕过授权 |
 | P1 | D05-D10 | 提升列表可用性、上传稳定性和中等数据量下的性能 | 查询 SQL、前端 Hook/表格、上传链路、DDL 与任务 | 查询口径或索引调整影响旧数据和两种数据库 |
 | P2 | D11 | 明确私有访问和物理清理边界，降低数据泄露/误删风险 | 下载/预览权限、清理任务和保留策略 | 物理删除不可逆，必须先完成产品确认 |
 | 未来 | D12 | 扩展在线网盘能力但不拖慢 MVP 交付 | 独立需求、接口和数据模型 | 范围膨胀、权限和存储成本上升 |
@@ -153,14 +154,14 @@
 - 后端文件的删除、恢复、移动、复制、标签和查询是多条独立调用链，必须统一权限、状态和事务边界。
 - 文件查询包含路径、子节点和统计等 SQL，列表规模增大后需要分页、索引和查询口径治理。
 - 项目同时维护 MySQL 与 PostgreSQL DDL，结构调整不能只修改一种方言。
-- 网盘业务表当前未继承租户实体基类，租户拦截器不会自动覆盖 `disk_store_*` 表；文件库成员关系也未绑定租户。
-- `base_file_save` 被网盘通过 `StoreFile.fileId` 引用，但当前仍是共享基础表，是否纳入网盘租户隔离需要在实现前定案。
+- D01-1 的租户隔离与迁移结果已通过人工验收；`base_file_save` 继续作为共享通用存储，网盘权限以经过租户和桶授权校验的网盘业务记录为准。
+- `base_file_save` 被网盘通过 `StoreFile.fileId` 引用且由多个模块共享；本次决定保持其通用存储目录，网盘权限以经过租户和桶授权校验的网盘业务记录为准。
 
 ### 待验证判断
 
 - `/api/disk/store` 与 Controller 的最终路由是否完全一致，需要以实际 Spring 路由扫描结果或接口定义核对。
 - D09 当前默认只覆盖同一 SPA 内的后台菜单 Tab 切换；浏览器刷新、关闭或网络中断后的续传归入 D12。
-- 桶成员权限、管理员越权范围和文件下载/预览的隐私要求需要产品确认。
+- 桶成员权限、管理员无租户上下文行为、OnlyOffice 回调签名及短时访问会话已通过人工验收；通用附件接口的全局访问策略不属于 D01-1。
 - 物理文件删除、重复文件引用和历史记录保留策略目前不应由实现者自行推断。
 
 ## 实施约束

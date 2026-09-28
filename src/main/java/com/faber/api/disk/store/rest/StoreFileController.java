@@ -5,6 +5,7 @@ import com.faber.api.disk.store.entity.StoreFile;
 import com.faber.api.disk.store.vo.req.StoreFileQueryVo;
 import com.faber.api.disk.store.vo.req.StoreFilesAddTags;
 import com.faber.api.disk.store.vo.req.StoreFilesMoveTo;
+import com.faber.api.base.admin.vo.ret.FilePreviewResourceRetVo;
 import com.faber.core.annotation.FaLogBiz;
 import com.faber.core.annotation.FaLogOpr;
 import com.faber.core.annotation.LogNoRet;
@@ -30,6 +31,14 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/disk/store/file")
 public class StoreFileController extends BaseTreeController<StoreFileBiz, StoreFile, Integer> {
+
+    @FaLogOpr(value = "创建网盘文件访问凭证", crud = LogCrudEnum.R)
+    @PostMapping("/accessResource/{storeFileId}")
+    @ResponseBody
+    @LogNoRet
+    public Ret<FilePreviewResourceRetVo> accessResource(@PathVariable("storeFileId") Integer storeFileId) {
+        return ok(baseBiz.createAccessResource(storeFileId));
+    }
 
     @FaLogOpr(value = "批量下载", crud = LogCrudEnum.R)
     @LogNoRet

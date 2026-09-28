@@ -9,7 +9,7 @@ import com.faber.api.base.admin.entity.User;
 import com.faber.api.disk.store.enums.StoreBucketUserTypeEnum;
 import com.faber.core.annotation.FaModalName;
 import com.faber.core.annotation.SqlEquals;
-import com.faber.core.bean.BaseDelEntity;
+import com.faber.core.bean.BaseTnDelEntity;
 import lombok.Data;
 
     
@@ -23,7 +23,7 @@ import lombok.Data;
 @FaModalName(name = "STORE-库-人员关联")
 @TableName("disk_store_bucket_user")
 @Data
-public class StoreBucketUser extends BaseDelEntity {
+public class StoreBucketUser extends BaseTnDelEntity {
 
     @ExcelProperty("ID")
     @TableId(type = IdType.AUTO)

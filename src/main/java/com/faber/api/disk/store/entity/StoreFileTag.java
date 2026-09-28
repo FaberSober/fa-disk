@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.faber.core.annotation.FaModalName;
-import com.faber.core.bean.BaseDelEntity;
+import com.faber.core.bean.BaseTnDelEntity;
 import lombok.Data;
 
     
@@ -19,7 +19,7 @@ import lombok.Data;
 @FaModalName(name = "STORE-文件-标签")
 @TableName("disk_store_file_tag")
 @Data
-public class StoreFileTag extends BaseDelEntity {
+public class StoreFileTag extends BaseTnDelEntity {
     @ExcelProperty("ID")
     @TableId(type = IdType.AUTO)
     private Integer id;

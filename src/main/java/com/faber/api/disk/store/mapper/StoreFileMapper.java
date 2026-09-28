@@ -3,6 +3,8 @@ package com.faber.api.disk.store.mapper;
 import com.faber.core.config.mybatis.base.FaBaseMapper;
 import com.faber.api.disk.store.entity.StoreFile;
 import com.faber.api.disk.store.vo.req.StoreFileQueryVo;
+import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
@@ -15,6 +17,10 @@ import java.util.List;
  * @date 2022-12-22 09:31:17
  */
 public interface StoreFileMapper extends FaBaseMapper<StoreFile> {
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("select tenant_id from disk_store_file where id = #{id} and deleted = false")
+    String selectTenantIdByIdForOnlyoffice(@Param("id") Integer id);
 
     List<StoreFile> queryFile(@Param("query") StoreFileQueryVo query, @Param("sorter") String sorter);
 

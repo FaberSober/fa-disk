@@ -8,7 +8,9 @@ import cn.hutool.core.util.ZipUtil;
 //import com.alicp.jetcache.anno.Cached;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.faber.api.base.admin.biz.FileSaveBiz;
+import com.faber.api.base.admin.biz.FilePreviewTicketBiz;
 import com.faber.api.base.admin.entity.FileSave;
+import com.faber.api.base.admin.vo.ret.FilePreviewResourceRetVo;
 import com.faber.api.disk.store.entity.StoreFile;
 import com.faber.api.disk.store.entity.StoreFileTag;
 import com.faber.api.disk.store.entity.StoreTag;
@@ -57,6 +59,9 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
 
     @Resource
     FileSaveBiz fileSaveBiz;
+
+    @Resource
+    FilePreviewTicketBiz filePreviewTicketBiz;
 
     @Resource
     StoreTagBiz storeTagBiz;
@@ -112,6 +117,20 @@ public class StoreFileBiz extends BaseTreeBiz<StoreFileMapper, StoreFile> {
         }
         storeBucketUserBiz.requireAccessible(file.getBucketId());
         return file;
+    }
+
+    public FilePreviewResourceRetVo createAccessResource(Integer storeFileId) {
+        StoreFile storeFile = requireAccessible(storeFileId);
+        if (Boolean.TRUE.equals(storeFile.getDir()) || storeFile.getFileId() == null) {
+            throw new BuzzException("该网盘记录不是可访问的文件");
+        }
+        String ticket = filePreviewTicketBiz.createTicket(storeFile.getFileId()).getTicket();
+        return filePreviewTicketBiz.exchangeTicket(ticket);
+    }
+
+    /** OnlyOffice 已验证回调 JWT 后，用文件记录恢复其租户上下文。 */
+    public String getTenantIdForOnlyoffice(Integer storeFileId) {
+        return baseMapper.selectTenantIdByIdForOnlyoffice(storeFileId);
     }
 
     private StoreFile requireTrash(Integer id) {

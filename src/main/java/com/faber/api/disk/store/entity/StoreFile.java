@@ -6,7 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.faber.core.annotation.*;
-import com.faber.core.bean.BaseDelEntity;
+import com.faber.core.bean.BaseTnDelEntity;
 import com.faber.core.config.easyexcel.type.FaJsonObj;
 import com.faber.core.config.mybatis.handler.UniversalJsonTypeHandler;
 import lombok.AllArgsConstructor;
@@ -27,7 +27,7 @@ import java.io.Serializable;
 @Data
 @FaModalName(name = "STORE-文件")
 @TableName(value = "disk_store_file", autoResultMap = true)
-public class StoreFile extends BaseDelEntity {
+public class StoreFile extends BaseTnDelEntity {
 
     @SqlTreeId
     @ExcelProperty("ID")
